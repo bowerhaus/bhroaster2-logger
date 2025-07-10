@@ -10,7 +10,8 @@ from datetime import datetime
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from database.models import DatabaseManager
-from sensors.dht22 import DHT22Sensor
+from sensors.managed_dht22 import ManagedDHT22Sensor
+from sensors.sensor_manager import sensor_manager
 from services.data_collector import DataCollector
 
 # Configure logging
@@ -19,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 # Set data collector to debug
 logging.getLogger('services.data_collector').setLevel(logging.DEBUG)
+logging.getLogger('sensors.managed_dht22').setLevel(logging.DEBUG)
+logging.getLogger('sensors.sensor_manager').setLevel(logging.DEBUG)
 
 app = Flask(__name__, 
            template_folder='../../templates',
@@ -48,7 +51,7 @@ def initialize_sensors(config):
         sensor_name = sensor_config['name']
         
         if sensor_type == 'DHT22':
-            sensor = DHT22Sensor(sensor_name, sensor_config)
+            sensor = ManagedDHT22Sensor(sensor_name, sensor_config)
             if sensor.initialize():
                 sensors[sensor_name] = sensor
                 logger.info(f"Initialized sensor: {sensor_name}")
@@ -208,6 +211,9 @@ def run_app():
         # Initialize sensors
         initialize_sensors(config)
         
+        # Start sensor manager
+        sensor_manager.start_reading()
+        
         # Initialize data collector
         sample_rate = config['logging']['sample_rate']
         data_collector = DataCollector(sensors, db_manager, socketio, sample_rate)
@@ -221,7 +227,11 @@ def run_app():
         logger.info(f"Data collection rate: {sample_rate} second(s)")
         logger.info(f"Data collector initialized: {data_collector is not None}")
         
-        socketio.run(app, host=host, port=port, debug=True)
+        try:
+            socketio.run(app, host=host, port=port, debug=True)
+        finally:
+            # Clean up sensor manager
+            sensor_manager.stop_reading()
         
     except Exception as e:
         logger.error(f"Failed to start application: {e}")

@@ -84,7 +84,11 @@ class DataCollector:
         for sensor_name, sensor in self.sensors.items():
             try:
                 logger.debug(f"Reading from sensor: {sensor_name}")
-                data = sensor.read()
+                # Use cached reading if available, otherwise direct read
+                if hasattr(sensor, 'get_cached_reading'):
+                    data = sensor.get_cached_reading()
+                else:
+                    data = sensor.read()
                 logger.debug(f"Sensor read completed. Data: {data}")
                 
                 if data:

@@ -3,7 +3,9 @@
     "allow": [
       "Bash(claude mcp:*)",
       "Bash(source:*)",
-      "Bash(python test_dht22.py:*)"
+      "Bash(python test_dht22.py:*)",
+      "Bash(pkill:*)",
+      "Bash(true)"
     ],
     "deny": []
   }
