@@ -1,0 +1,10 @@
+│ > i want to create a data logging application for a coffee roaster. the aim of this is to collect a number of streams of data for    │
+│   subsequent coffee roasts. the data might be temperature, humidity, CO2, VOC against time. initially we'll capture temp and         │
+│   humidity and add the others later. there may be further data streams added in future. the data needs to be accessed from a web     │
+│   interface, with the primary screen being a list of available roasts against timestamps. when a roast is selected the data is       │
+│   displayed on a chart. Roasts are typically 10 minutes in length. Capture datapoints every second. One use for this data will be    │
+│   to try and estimate/predict when the first crack occurs. you are a experienced coffee roaster and software engineer. write me a    │
+│   product requirement document for this application. you can ask me up to 6 questions to clarify any points. The application should  │
+│   be written in python and will run on a raspberry pi compute module with 16Gb disk. the available sensor are dht22, adafruit        │
+│   sht31, adafruit sgp30. use context7.                                                                                               │
+╰───────────────────

@@ -1,0 +1,9 @@
+flask==2.3.3
+flask-socketio==5.3.6
+sqlite3
+adafruit-circuitpython-dht
+adafruit-circuitpython-sht31d
+board
+digitalio
+python-socketio[client]
+eventlet
