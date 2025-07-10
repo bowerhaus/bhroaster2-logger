@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(claude mcp:*)"
+      "Bash(claude mcp:*)",
+      "Bash(source:*)",
+      "Bash(python test_dht22.py:*)"
     ],
     "deny": []
   }

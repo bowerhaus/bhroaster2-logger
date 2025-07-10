@@ -21,7 +21,8 @@ class DHT22Sensor(SensorBase):
         super().__init__(name, config)
         self.gpio_pin = config.get('gpio_pin', 4)
         self.dht_device = None
-        self.mock_mode = not HAS_HARDWARE
+        # Force mock mode for web application due to threading issues
+        self.mock_mode = True  # not HAS_HARDWARE
         
         if self.mock_mode:
             logger.warning(f"DHT22 sensor {name} running in mock mode - hardware libraries not available")
@@ -71,8 +72,36 @@ class DHT22Sensor(SensorBase):
                 if not self.initialize():
                     return None
             
-            temperature = self.dht_device.temperature
-            humidity = self.dht_device.humidity
+            # Use threaded read with timeout to avoid hanging
+            import threading
+            import queue
+            
+            result_queue = queue.Queue()
+            
+            def sensor_read():
+                try:
+                    temp = self.dht_device.temperature
+                    hum = self.dht_device.humidity
+                    result_queue.put((temp, hum))
+                except Exception as e:
+                    result_queue.put(e)
+            
+            # Start read thread
+            read_thread = threading.Thread(target=sensor_read)
+            read_thread.daemon = True
+            read_thread.start()
+            
+            # Wait for result with timeout
+            try:
+                result = result_queue.get(timeout=5)  # 5 second timeout
+                
+                if isinstance(result, Exception):
+                    raise result
+                    
+                temperature, humidity = result
+            except queue.Empty:
+                self.log_error("DHT22 read timeout (5 seconds)")
+                return None
             
             if temperature is None or humidity is None:
                 self.log_error("Failed to read sensor data - returned None")

@@ -1,0 +1,35 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Coffee Roaster Logger",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/app.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            },
+            "args": [],
+            "justMyCode": false,
+            "stopOnEntry": false,
+            "python": "${workspaceFolder}/venv/bin/python"
+        },
+        {
+            "name": "Test DHT22 Sensor",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test_dht22.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            },
+            "args": [],
+            "justMyCode": false,
+            "stopOnEntry": false,
+            "python": "${workspaceFolder}/venv/bin/python"
+        }
+    ]
+}

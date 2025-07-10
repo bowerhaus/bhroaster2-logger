@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Coffee Roaster Logger{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-0">
+    <!-- Header Section -->
+    <div class="bg-white shadow rounded-lg p-6 mb-6">
+        <div class="flex justify-between items-center">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-900">Roast Sessions</h2>
+                <p class="text-gray-600 mt-1">Track and analyze your coffee roasting sessions</p>
+            </div>
+            
+            <div class="flex space-x-3">
+                {% if active_session %}
+                    <button id="stopRoastBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                        <i class="fas fa-stop mr-2"></i>
+                        Stop Current Roast
+                    </button>
+                    <a href="/roast/{{ active_session.id }}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                        <i class="fas fa-chart-line mr-2"></i>
+                        View Live Data
+                    </a>
+                {% else %}
+                    <button id="startRoastBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                        <i class="fas fa-play mr-2"></i>
+                        Start New Roast
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Roast Status -->
+    {% if active_session %}
+    <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+        <div class="flex items-center">
+            <i class="fas fa-circle text-red-600 animate-pulse mr-3"></i>
+            <div>
+                <h3 class="text-lg font-medium text-red-900">Active Roast: {{ active_session.name }}</h3>
+                <p class="text-red-700">Started: {{ active_session.start_time | replace('T', ' ') | replace('.', ' ') | truncate(19, True, '') }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Roast Sessions Table -->
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-medium text-gray-900">Recent Roast Sessions</h3>
+        </div>
+        
+        {% if roast_sessions %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Time</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Peak Temp</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data Points</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for session in roast_sessions %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-medium text-gray-900">{{ session.name }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900">{{ session.start_time | replace('T', ' ') | replace('.', ' ') | truncate(19, True, '') }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if session.end_time %}
+                                <div class="text-sm text-gray-900">
+                                    {{ session.duration_minutes }}m {{ session.duration_seconds }}s
+                                </div>
+                            {% else %}
+                                <div class="text-sm text-amber-600">Active</div>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if session.peak_temp %}
+                                <div class="text-sm text-gray-900">{{ "%.1f" | format(session.peak_temp) }}°C</div>
+                            {% else %}
+                                <div class="text-sm text-gray-400">-</div>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if session.status == 'active' %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                    <i class="fas fa-circle mr-1 text-red-600"></i>
+                                    Active
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    <i class="fas fa-check mr-1"></i>
+                                    Completed
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900">{{ session.data_count or 0 }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <a href="/roast/{{ session.id }}" class="text-blue-600 hover:text-blue-900">
+                                <i class="fas fa-chart-line mr-1"></i>
+                                View Data
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-12">
+            <i class="fas fa-coffee text-gray-300 text-6xl mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No roast sessions yet</h3>
+            <p class="text-gray-500 mb-4">Start your first roast to begin collecting data</p>
+            <button id="startFirstRoastBtn" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                <i class="fas fa-play mr-2"></i>
+                Start Your First Roast
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Initialize Socket.IO connection
+const socket = io();
+
+// DOM elements
+const startRoastBtn = document.getElementById('startRoastBtn');
+const startFirstRoastBtn = document.getElementById('startFirstRoastBtn');
+const stopRoastBtn = document.getElementById('stopRoastBtn');
+
+// Handle start roast
+async function startRoast() {
+    try {
+        const response = await fetch('/api/roasts', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({})
+        });
+        
+        if (response.ok) {
+            location.reload(); // Refresh page to show new roast
+        } else {
+            const error = await response.json();
+            alert('Error starting roast: ' + error.error);
+        }
+    } catch (error) {
+        alert('Error starting roast: ' + error.message);
+    }
+}
+
+// Event listeners
+if (startRoastBtn) {
+    startRoastBtn.addEventListener('click', startRoast);
+}
+
+if (startFirstRoastBtn) {
+    startFirstRoastBtn.addEventListener('click', startRoast);
+}
+
+// Handle stop roast
+if (stopRoastBtn) {
+    stopRoastBtn.addEventListener('click', async () => {
+        try {
+            const activeRoastId = '{{ active_session.id if active_session else "" }}';
+            const response = await fetch(`/api/roasts/${activeRoastId}/stop`, {
+                method: 'PUT'
+            });
+            
+            if (response.ok) {
+                location.reload(); // Refresh page
+            } else {
+                const error = await response.json();
+                alert('Error stopping roast: ' + error.error);
+            }
+        } catch (error) {
+            alert('Error stopping roast: ' + error.message);
+        }
+    });
+}
+
+// Socket.IO event handlers
+socket.on('roast_started', (data) => {
+    console.log('Roast started:', data);
+    setTimeout(() => location.reload(), 1000);
+});
+
+socket.on('roast_stopped', (data) => {
+    console.log('Roast stopped:', data);
+    setTimeout(() => location.reload(), 1000);
+});
+
+</script>
+{% endblock %}

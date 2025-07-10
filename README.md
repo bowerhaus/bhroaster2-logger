@@ -24,7 +24,7 @@ pip install -r requirements.txt
 python src/app.py
 ```
 
-4. Access the web interface at `http://localhost:8080`
+4. Access the web interface at `http://localhost:5000`
 
 ## Hardware Requirements
 
