@@ -1,15 +1,9 @@
 {
   "sensors": [
     {
-      "type": "DHT22",
-      "name": "DHT22",
-      "gpio_pin": 4,
-      "metrics": ["temperature", "humidity"]
-    },
-    {
       "type": "SHT31",
-      "name": "SHT32",
-      "i2c_address": "0x44",
+      "name": "SHT31",
+      "i2c_address": 68,
       "metrics": ["temperature", "humidity"]
     }
   ],

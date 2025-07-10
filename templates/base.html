@@ -12,10 +12,10 @@
 <body class="bg-gray-100 min-h-screen">
     <nav class="bg-amber-800 text-white shadow-lg">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center h-16">
+            <div class="flex justify-between items-center h-12">
                 <div class="flex items-center">
-                    <i class="fas fa-coffee text-2xl mr-3"></i>
-                    <h1 class="text-xl font-bold">Coffee Roaster Logger</h1>
+                    <i class="fas fa-coffee text-lg mr-2"></i>
+                    <h1 class="text-lg font-bold">Coffee Roaster Logger</h1>
                 </div>
                 <div class="flex items-center space-x-4">
                     <a href="/" class="hover:text-amber-200 transition-colors">
@@ -33,22 +33,41 @@
         </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+    <main class="max-w-7xl mx-auto py-3 px-3 lg:px-4">
         {% block content %}{% endblock %}
     </main>
 
-    <footer class="bg-gray-800 text-white mt-12">
-        <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center">
-                <p class="text-sm">Coffee Roaster Data Logger v1.0</p>
-                <p class="text-sm">
-                    <i class="fas fa-thermometer-half mr-1"></i>
-                    DHT22 Sensor Active
-                </p>
-            </div>
-        </div>
-    </footer>
 
     {% block scripts %}{% endblock %}
+
+<script>
+// Add global SocketIO debugging
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof io !== 'undefined') {
+        const socket = io();
+        
+        socket.on('connect', function() {
+            console.log('🔗 SocketIO connected successfully');
+            // Test emit to verify connection
+            socket.emit('test_connection', {message: 'test from client'});
+        });
+        
+        socket.on('disconnect', function() {
+            console.log('❌ SocketIO disconnected');
+        });
+        
+        socket.on('connect_error', function(error) {
+            console.log('🚨 SocketIO connection error:', error);
+        });
+        
+        socket.on('test_response', function(data) {
+            console.log('🧪 Test response from server:', data);
+        });
+        
+        // Make socket globally available for debugging
+        window.debugSocket = socket;
+    }
+});
+</script>
 </body>
 </html>

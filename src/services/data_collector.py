@@ -57,10 +57,11 @@ class DataCollector:
     
     def _collection_loop(self):
         """Main data collection loop"""
-        logger.info("Data collection loop started")
+        logger.info("🔄 Data collection loop started")
         
         while self.collecting and not self.stop_event.is_set():
             try:
+                logger.debug(f"🔄 Collection loop iteration - collecting: {self.collecting}")
                 self._collect_data_point()
                 
                 # Wait for next sample (returns True if stop event is set)
@@ -71,7 +72,7 @@ class DataCollector:
                 logger.error(f"Error in data collection loop: {e}")
                 time.sleep(1)  # Brief pause on error
         
-        logger.info("Data collection loop ended")
+        logger.info("🛑 Data collection loop ended")
     
     def _collect_data_point(self):
         """Collect a single data point from all sensors"""
@@ -110,14 +111,26 @@ class DataCollector:
                         if success:
                             logger.info(f"Stored: {sensor_name} {metric_type}={value}{unit}")
                             # Emit real-time data to connected clients
-                            self.socketio.emit('sensor_data', {
+                            sensor_event = {
                                 'roast_id': self.active_roast_id,
                                 'sensor_name': sensor_name,
                                 'metric_type': metric_type,
                                 'value': value,
                                 'unit': unit,
                                 'timestamp': timestamp
-                            })
+                            }
+                            # Emit to all connected clients (from background thread)
+                            try:
+                                # Use background task approach for thread-safe emissions
+                                def emit_sensor_data():
+                                    self.socketio.emit('sensor_data', sensor_event)
+                                    logger.info(f"🔴 EMITTED SocketIO sensor_data: {metric_type}={value}{unit} to roast {self.active_roast_id}")
+                                
+                                # Start background task for emission
+                                self.socketio.start_background_task(emit_sensor_data)
+                                
+                            except Exception as emit_error:
+                                logger.error(f"❌ Failed to emit SocketIO data: {emit_error}")
                         else:
                             logger.warning(f"Failed to store data point: {sensor_name}")
                 else:

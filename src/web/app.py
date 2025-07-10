@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from database.models import DatabaseManager
 from sensors.managed_dht22 import ManagedDHT22Sensor
+from sensors.managed_sht31 import ManagedSHT31Sensor
 from sensors.sensor_manager import sensor_manager
 from services.data_collector import DataCollector
 
@@ -57,6 +58,15 @@ def initialize_sensors(config):
                 logger.info(f"Initialized sensor: {sensor_name}")
             else:
                 logger.error(f"Failed to initialize sensor: {sensor_name}")
+        elif sensor_type == 'SHT31':
+            sensor = ManagedSHT31Sensor(sensor_name, sensor_config)
+            if sensor.initialize():
+                sensors[sensor_name] = sensor
+                logger.info(f"Initialized sensor: {sensor_name}")
+            else:
+                logger.error(f"Failed to initialize sensor: {sensor_name}")
+        else:
+            logger.error(f"Unknown sensor type: {sensor_type}")
 
 @app.route('/')
 def index():
@@ -184,17 +194,41 @@ def get_roast_data(roast_id):
 @socketio.on('connect')
 def handle_connect():
     """Handle client connection"""
-    logger.info('Client connected')
+    logger.info('🔗 SocketIO Client connected successfully')
     
     # Send current active roast if any
     active_session = db_manager.get_active_roast_session()
     if active_session:
         emit('roast_active', active_session)
+        
+        # Send latest sensor readings for dashboard
+        if sensors:
+            for sensor_name, sensor in sensors.items():
+                if hasattr(sensor, 'get_cached_reading'):
+                    data = sensor.get_cached_reading()
+                    if data:
+                        for metric_type, value in data.items():
+                            sensor_data = {
+                                'roast_id': active_session['id'],
+                                'sensor_name': sensor_name,
+                                'metric_type': metric_type,
+                                'value': value,
+                                'unit': '°C' if metric_type == 'temperature' else '%',
+                                'timestamp': datetime.now().isoformat()
+                            }
+                            emit('sensor_data', sensor_data)
+                            logger.debug(f"Sent initial sensor data to client: {sensor_data}")
+
+@socketio.on('test_connection')
+def handle_test_connection(data):
+    """Handle test connection from client"""
+    logger.info(f'🧪 Test connection received from client: {data}')
+    emit('test_response', {'status': 'server received test'})
 
 @socketio.on('disconnect')
 def handle_disconnect():
     """Handle client disconnection"""
-    logger.info('Client disconnected')
+    logger.info('❌ SocketIO Client disconnected')
 
 def run_app():
     """Initialize and run the Flask application"""
