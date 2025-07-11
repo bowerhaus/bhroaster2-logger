@@ -214,6 +214,25 @@ def get_live_data(roast_id):
         'timestamp': datetime.now().isoformat()
     })
 
+@app.route('/api/roasts/<roast_id>', methods=['DELETE'])
+def delete_roast(roast_id):
+    """API endpoint to delete a roast session"""
+    try:
+        # Check if roast is currently active
+        active_session = db_manager.get_active_roast_session()
+        if active_session and active_session['id'] == roast_id:
+            return jsonify({'error': 'Cannot delete active roast session'}), 400
+        
+        success = db_manager.delete_roast_session(roast_id)
+        if success:
+            return jsonify({'message': 'Roast deleted successfully'})
+        else:
+            return jsonify({'error': 'Roast not found'}), 404
+            
+    except Exception as e:
+        logger.error(f"Failed to delete roast: {e}")
+        return jsonify({'error': 'Failed to delete roast'}), 500
+
 @socketio.on('connect')
 def handle_connect():
     """Handle client connection"""

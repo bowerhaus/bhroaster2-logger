@@ -309,3 +309,31 @@ class DatabaseManager:
                 'minutes_since_last_data': None,
                 'is_recently_active': False
             }
+    
+    def delete_roast_session(self, roast_id: str) -> bool:
+        """Delete a roast session and all its data points"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # First delete all data points for this roast
+                cursor.execute('''
+                    DELETE FROM data_points WHERE roast_id = ?
+                ''', (roast_id,))
+                
+                # Then delete the roast session
+                cursor.execute('''
+                    DELETE FROM roast_sessions WHERE id = ?
+                ''', (roast_id,))
+                
+                if cursor.rowcount > 0:
+                    conn.commit()
+                    logger.info(f"Deleted roast session and data: {roast_id}")
+                    return True
+                else:
+                    logger.warning(f"No roast session found to delete: {roast_id}")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Failed to delete roast session: {e}")
+            return False

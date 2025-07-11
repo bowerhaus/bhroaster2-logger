@@ -121,10 +121,17 @@
                             <div class="text-xs text-gray-900" id="data-count-{{ session.id }}">{{ session.data_count or 0 }}</div>
                         </td>
                         <td class="px-3 py-2 whitespace-nowrap text-xs font-medium">
-                            <a href="/roast/{{ session.id }}" class="text-blue-600 hover:text-blue-900">
-                                <i class="fas fa-chart-line mr-1"></i>
-                                View
-                            </a>
+                            <div class="flex items-center space-x-2">
+                                <a href="/roast/{{ session.id }}" class="text-blue-600 hover:text-blue-900">
+                                    <i class="fas fa-chart-line mr-1"></i>
+                                    View
+                                </a>
+                                {% if session.status != 'active' %}
+                                <button class="delete-roast-btn text-red-600 hover:text-red-900" data-roast-id="{{ session.id }}" data-roast-name="{{ session.name }}">
+                                    <i class="fas fa-trash text-xs"></i>
+                                </button>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -142,6 +149,27 @@
             </button>
         </div>
         {% endif %}
+    </div>
+</div>
+
+<!-- Minimalist Delete Confirmation Dialog -->
+<div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 max-w-sm mx-4 shadow-xl">
+        <div class="text-center">
+            <div class="text-red-600 mb-3">
+                <i class="fas fa-trash text-2xl"></i>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Delete Roast?</h3>
+            <p class="text-sm text-gray-600 mb-4" id="deleteMessage"></p>
+            <div class="flex space-x-3">
+                <button id="cancelDelete" class="flex-1 px-4 py-2 text-sm border border-gray-300 rounded text-gray-700 hover:bg-gray-50">
+                    Cancel
+                </button>
+                <button id="confirmDelete" class="flex-1 px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700">
+                    Delete
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -303,6 +331,80 @@ socket.on('roast_started', (data) => {
 socket.on('roast_stopped', (data) => {
     console.log('Roast stopped:', data);
     setTimeout(() => location.reload(), 1000);
+});
+
+// Delete roast functionality
+const deleteModal = document.getElementById('deleteModal');
+const deleteMessage = document.getElementById('deleteMessage');
+const cancelDeleteBtn = document.getElementById('cancelDelete');
+const confirmDeleteBtn = document.getElementById('confirmDelete');
+let currentDeleteRoastId = null;
+
+// Show delete modal
+function showDeleteModal(roastId, roastName) {
+    currentDeleteRoastId = roastId;
+    deleteMessage.textContent = `"${roastName}" will be permanently deleted.`;
+    deleteModal.classList.remove('hidden');
+    deleteModal.classList.add('flex');
+}
+
+// Hide delete modal
+function hideDeleteModal() {
+    deleteModal.classList.add('hidden');
+    deleteModal.classList.remove('flex');
+    currentDeleteRoastId = null;
+}
+
+// Delete roast function
+async function deleteRoast(roastId) {
+    try {
+        const response = await fetch(`/api/roasts/${roastId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            location.reload(); // Refresh to show updated list
+        } else {
+            const error = await response.json();
+            alert('Error deleting roast: ' + error.error);
+        }
+    } catch (error) {
+        alert('Error deleting roast: ' + error.message);
+    }
+}
+
+// Event listeners for delete buttons
+document.addEventListener('click', (e) => {
+    if (e.target.closest('.delete-roast-btn')) {
+        const btn = e.target.closest('.delete-roast-btn');
+        const roastId = btn.dataset.roastId;
+        const roastName = btn.dataset.roastName;
+        showDeleteModal(roastId, roastName);
+    }
+});
+
+// Modal event listeners
+cancelDeleteBtn.addEventListener('click', hideDeleteModal);
+
+confirmDeleteBtn.addEventListener('click', () => {
+    if (currentDeleteRoastId) {
+        deleteRoast(currentDeleteRoastId);
+        hideDeleteModal();
+    }
+});
+
+// Close modal on backdrop click
+deleteModal.addEventListener('click', (e) => {
+    if (e.target === deleteModal) {
+        hideDeleteModal();
+    }
+});
+
+// Close modal on escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !deleteModal.classList.contains('hidden')) {
+        hideDeleteModal();
+    }
 });
 
 </script>
