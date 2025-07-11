@@ -5,7 +5,9 @@
       "Bash(source:*)",
       "Bash(python test_dht22.py:*)",
       "Bash(pkill:*)",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(find:*)",
+      "Bash(ls:*)"
     ],
     "deny": []
   }

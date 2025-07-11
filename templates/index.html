@@ -5,26 +5,29 @@
 {% block content %}
 <div class="px-2 sm:px-0">
     <!-- Header Section -->
-    <div class="bg-white shadow rounded-lg p-4 mb-4">
+    <div class="glass-card rounded-xl p-6 mb-6 glow-amber">
         <div class="flex justify-between items-center">
             <div>
-                <h2 class="text-xl font-bold text-gray-900">Roast Sessions</h2>
-                <p class="text-gray-600 text-sm">Track and analyze your coffee roasting sessions</p>
+                <h2 class="text-2xl font-bold text-amber-300 mb-2">
+                    <i class="fas fa-thermometer-half mr-2"></i>
+                    Roasting Control
+                </h2>
+                <p class="text-gray-300 text-sm">Professional coffee roasting data logger</p>
             </div>
             
-            <div class="flex space-x-3">
+            <div class="flex space-x-4">
                 {% if active_session %}
-                    <button id="stopRoastBtn" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 text-sm rounded font-medium transition-colors">
-                        <i class="fas fa-stop mr-1"></i>
+                    <button id="stopRoastBtn" class="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white px-6 py-3 text-sm rounded-lg font-semibold transition-all duration-300 shadow-lg glow-red">
+                        <i class="fas fa-stop mr-2"></i>
                         Stop Current Roast
                     </button>
-                    <a href="/roast/{{ active_session.id }}" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-sm rounded font-medium transition-colors">
-                        <i class="fas fa-chart-line mr-1"></i>
+                    <a href="/roast/{{ active_session.id }}" class="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 text-sm rounded-lg font-semibold transition-all duration-300 shadow-lg glow-blue">
+                        <i class="fas fa-chart-line mr-2"></i>
                         View Live Data
                     </a>
                 {% else %}
-                    <button id="startRoastBtn" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 text-sm rounded font-medium transition-colors">
-                        <i class="fas fa-play mr-1"></i>
+                    <button id="startRoastBtn" class="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-6 py-3 text-sm rounded-lg font-semibold transition-all duration-300 shadow-lg glow-green">
+                        <i class="fas fa-play mr-2"></i>
                         Start New Roast
                     </button>
                 {% endif %}
@@ -34,97 +37,127 @@
 
     <!-- Active Roast Status -->
     {% if active_session %}
-    <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-        <div class="flex justify-between items-center">
+    <div class="glass-card rounded-xl p-6 mb-6 border-l-4 border-red-500 glow-red">
+        <div class="flex justify-between items-center mb-4">
             <div class="flex items-center">
-                <i class="fas fa-circle text-red-600 animate-pulse mr-2"></i>
+                <i class="fas fa-fire text-red-400 animate-pulse mr-3 text-xl"></i>
                 <div>
-                    <h3 class="text-base font-medium text-red-900">Active: {{ active_session.name }}</h3>
-                    <p class="text-red-700 text-sm">Started: {{ active_session.start_time | replace('T', ' ') | replace('.', ' ') | truncate(19, True, '') }} | Duration: <span id="liveDuration">-</span></p>
+                    <h3 class="text-xl font-bold text-red-400">Active Roast: {{ active_session.name }}</h3>
+                    <p class="text-red-300 text-sm">Started: {{ active_session.start_time | replace('T', ' ') | replace('.', ' ') | truncate(19, True, '') }} | Duration: <span id="liveDuration" class="font-bold">-</span></p>
                 </div>
             </div>
             
-            <!-- Live Sensor Readings -->
-            <div class="flex gap-3">
-                <div class="bg-white rounded p-2 border border-red-300 text-center min-w-[80px]">
-                    <div class="text-lg font-bold text-red-600" id="liveTemp">-</div>
-                    <div class="text-xs text-red-500">Temp</div>
-                </div>
-                <div class="bg-white rounded p-2 border border-blue-300 text-center min-w-[80px]">
-                    <div class="text-lg font-bold text-blue-600" id="liveHumidity">-</div>
-                    <div class="text-xs text-blue-500">Humidity</div>
-                </div>
+            <div class="flex items-center space-x-2">
+                <div class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                <span class="text-red-300 font-semibold">Recording</span>
+            </div>
+        </div>
+        
+        <!-- Live Sensor Readings -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="glass-card rounded-lg p-4 border border-red-400">
+                <div class="text-sm text-red-300">Temperature</div>
+                <div class="text-2xl font-bold text-red-400" id="liveTemp">-</div>
+            </div>
+            <div class="glass-card rounded-lg p-4 border border-blue-400">
+                <div class="text-sm text-blue-300">Humidity</div>
+                <div class="text-2xl font-bold text-blue-400" id="liveHumidity">-</div>
+            </div>
+            <div class="glass-card rounded-lg p-4 border border-amber-400">
+                <div class="text-sm text-amber-300">Duration</div>
+                <div class="text-2xl font-bold text-amber-400" id="liveDurationCard">-</div>
+            </div>
+            <div class="glass-card rounded-lg p-4 border border-green-400">
+                <div class="text-sm text-green-300">Data Points</div>
+                <div class="text-2xl font-bold text-green-400" id="liveDataCount">-</div>
             </div>
         </div>
     </div>
     {% endif %}
 
     <!-- Roast Sessions Table -->
-    <div class="bg-white shadow rounded-lg overflow-hidden">
-        <div class="px-4 py-3 border-b border-gray-200">
-            <h3 class="text-base font-medium text-gray-900">Recent Roast Sessions</h3>
+    <div class="glass-card rounded-xl overflow-hidden glow-amber">
+        <div class="px-6 py-4 border-b border-gray-600">
+            <div class="flex items-center justify-between">
+                <h3 class="text-xl font-bold text-amber-300">
+                    <i class="fas fa-history mr-2"></i>
+                    Recent Roast Sessions
+                </h3>
+                <div class="text-sm text-gray-400">
+                    <i class="fas fa-database mr-1"></i>
+                    {{ roast_sessions | length }} total sessions
+                </div>
+            </div>
         </div>
         
         {% if roast_sessions %}
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Time</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Peak Temp</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data Points</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-gray-600">
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Name</th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Start Time</th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Duration</th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Peak Temp</th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Status</th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Data Points</th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
+                <tbody>
                     {% for session in roast_sessions %}
-                    <tr class="hover:bg-gray-50" data-roast-id="{{ session.id }}">
-                        <td class="px-3 py-2 whitespace-nowrap">
-                            <div class="text-sm font-medium text-gray-900">{{ session.name }}</div>
+                    <tr class="border-b border-gray-700 hover:bg-gray-800/50 transition-colors duration-200{% if session.status == 'active' %} bg-red-900/20 border-red-500/30{% endif %}" data-roast-id="{{ session.id }}">
+                        <td class="px-4 py-3">
+                            <div class="text-sm font-medium text-white">{{ session.name }}</div>
                         </td>
-                        <td class="px-3 py-2 whitespace-nowrap">
-                            <div class="text-xs text-gray-900">{{ session.start_time | replace('T', ' ') | replace('.', ' ') | truncate(19, True, '') }}</div>
+                        <td class="px-4 py-3">
+                            <div class="text-sm text-gray-300">{{ session.start_time | replace('T', ' ') | replace('.', ' ') | truncate(19, True, '') }}</div>
                         </td>
-                        <td class="px-3 py-2 whitespace-nowrap">
+                        <td class="px-4 py-3">
                             {% if session.end_time %}
-                                <div class="text-xs text-gray-900">
+                                <div class="text-sm text-gray-300">
                                     {{ session.duration_minutes }}m {{ session.duration_seconds }}s
                                 </div>
                             {% else %}
-                                <div class="text-xs text-amber-600" id="duration-{{ session.id }}">Active</div>
+                                <div class="text-sm text-amber-400 font-semibold" id="duration-{{ session.id }}">Active</div>
                             {% endif %}
                         </td>
-                        <td class="px-3 py-2 whitespace-nowrap">
+                        <td class="px-4 py-3">
                             {% if session.peak_temp %}
-                                <div class="text-xs text-gray-900">{{ "%.1f" | format(session.peak_temp) }}°C</div>
+                                <div class="text-sm text-gray-300">{{ "%.1f" | format(session.peak_temp) }}°C</div>
                             {% else %}
-                                <div class="text-xs text-gray-400">-</div>
+                                <div class="text-sm text-gray-400">-</div>
                             {% endif %}
                         </td>
-                        <td class="px-3 py-2 whitespace-nowrap">
+                        <td class="px-4 py-3">
                             {% if session.status == 'active' %}
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                    <i class="fas fa-circle mr-1 text-red-600 animate-pulse"></i>
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-900/50 text-red-300 border border-red-500/30">
+                                    <i class="fas fa-circle mr-1 text-red-500 animate-pulse"></i>
                                     Active
                                 </span>
                             {% else %}
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    <i class="fas fa-check mr-1"></i>
-                                    Done
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-900/50 text-green-300 border border-green-500/30">
+                                    <i class="fas fa-check mr-1 text-green-500"></i>
+                                    Completed
                                 </span>
                             {% endif %}
                         </td>
-                        <td class="px-3 py-2 whitespace-nowrap">
-                            <div class="text-xs text-gray-900" id="data-count-{{ session.id }}">{{ session.data_count or 0 }}</div>
+                        <td class="px-4 py-3">
+                            <div class="text-sm text-gray-300" id="data-count-{{ session.id }}">{{ session.data_count or 0 }}</div>
                         </td>
-                        <td class="px-3 py-2 whitespace-nowrap text-xs font-medium">
-                            <a href="/roast/{{ session.id }}" class="text-blue-600 hover:text-blue-900">
-                                <i class="fas fa-chart-line mr-1"></i>
-                                View
-                            </a>
+                        <td class="px-4 py-3 text-sm font-medium">
+                            <div class="flex items-center space-x-3">
+                                <button class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200" onclick="window.location.href='/roast/{{ session.id }}'">
+                                    <i class="fas fa-chart-line mr-1"></i>
+                                    View
+                                </button>
+                                {% if session.status != 'active' %}
+                                <button class="delete-roast-btn bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200" data-roast-id="{{ session.id }}" data-roast-name="{{ session.name }}">
+                                    <i class="fas fa-trash mr-1"></i>
+                                    Delete
+                                </button>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -133,15 +166,36 @@
         </div>
         {% else %}
         <div class="text-center py-12">
-            <i class="fas fa-coffee text-gray-300 text-6xl mb-4"></i>
-            <h3 class="text-lg font-medium text-gray-900 mb-2">No roast sessions yet</h3>
-            <p class="text-gray-500 mb-4">Start your first roast to begin collecting data</p>
-            <button id="startFirstRoastBtn" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+            <i class="fas fa-coffee text-gray-500 text-6xl mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-300 mb-2">No roast sessions yet</h3>
+            <p class="text-gray-400 mb-4">Start your first roast to begin collecting data</p>
+            <button id="startFirstRoastBtn" class="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-300 shadow-lg glow-green">
                 <i class="fas fa-play mr-2"></i>
                 Start Your First Roast
             </button>
         </div>
         {% endif %}
+    </div>
+</div>
+
+<!-- Dark Modern Delete Confirmation Dialog -->
+<div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-75 hidden items-center justify-center z-50">
+    <div class="glass-card rounded-xl p-6 max-w-sm mx-4 shadow-xl glow-red">
+        <div class="text-center">
+            <div class="text-red-400 mb-4">
+                <i class="fas fa-trash text-3xl"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-3">Delete Roast?</h3>
+            <p class="text-sm text-gray-300 mb-6" id="deleteMessage"></p>
+            <div class="flex space-x-3">
+                <button id="cancelDelete" class="flex-1 px-4 py-2 text-sm glass-card border border-gray-500 rounded-lg text-gray-300 hover:bg-gray-700/50 transition-colors">
+                    Cancel
+                </button>
+                <button id="confirmDelete" class="flex-1 px-4 py-2 text-sm bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-lg transition-all duration-300">
+                    Delete
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -225,9 +279,16 @@ if (activeRoastId && activeRoastStartTime) {
         const duration = (now - startTime) / 1000;
         const minutes = Math.floor(duration / 60);
         const seconds = Math.floor(duration % 60);
+        const durationText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        
         const durationElement = document.getElementById('liveDuration');
         if (durationElement) {
-            durationElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            durationElement.textContent = durationText;
+        }
+        
+        const durationCardElement = document.getElementById('liveDurationCard');
+        if (durationCardElement) {
+            durationCardElement.textContent = durationText;
         }
     }
     
@@ -235,36 +296,71 @@ if (activeRoastId && activeRoastStartTime) {
     setInterval(updateDuration, 1000);
 }
 
-// Global sensor data listener (works for any active roast)
-socket.on('sensor_data', (data) => {
-    console.log('🟢 DASHBOARD received sensor data:', data);
+// Polling for live data updates (1 second interval)
+let lastUpdateTimestamp = '';
+
+async function pollForLiveData() {
+    if (!activeRoastId) return;
     
-    if (activeRoastId && data.roast_id === activeRoastId) {
-        // Update live sensor readings
-        if (data.metric_type === 'temperature') {
-            const tempElement = document.getElementById('liveTemp');
-            if (tempElement) {
-                tempElement.textContent = `${data.value.toFixed(1)}°C`;
-            }
-        } else if (data.metric_type === 'humidity') {
-            const humidityElement = document.getElementById('liveHumidity');
-            if (humidityElement) {
-                humidityElement.textContent = `${data.value.toFixed(1)}%`;
-            }
+    try {
+        const response = await fetch(`/api/roasts/${activeRoastId}/live-data?since=${lastUpdateTimestamp}`);
+        const result = await response.json();
+        
+        if (result.data && result.data.length > 0) {
+            console.log('🟢 DASHBOARD received live data:', result.data);
+            
+            // Process new data points
+            result.data.forEach(dataPoint => {
+                // Update live sensor readings
+                if (dataPoint.metric_type === 'temperature') {
+                    const tempElement = document.getElementById('liveTemp');
+                    if (tempElement) {
+                        tempElement.textContent = `${dataPoint.value.toFixed(1)}°C`;
+                    }
+                } else if (dataPoint.metric_type === 'humidity') {
+                    const humidityElement = document.getElementById('liveHumidity');
+                    if (humidityElement) {
+                        humidityElement.textContent = `${dataPoint.value.toFixed(1)}%`;
+                    }
+                }
+                
+                // Update data count in table for active roast
+                const dataCountElement = document.getElementById(`data-count-${activeRoastId}`);
+                if (dataCountElement) {
+                    const currentCount = parseInt(dataCountElement.textContent) || 0;
+                    dataCountElement.textContent = currentCount + 1;
+                }
+                
+                // Update live data count card
+                const liveDataCountElement = document.getElementById('liveDataCount');
+                if (liveDataCountElement) {
+                    const currentCount = parseInt(liveDataCountElement.textContent) || 0;
+                    liveDataCountElement.textContent = currentCount + 1;
+                }
+            });
+            
+            // Update timestamp for next poll
+            lastUpdateTimestamp = result.timestamp;
         }
         
-        // Update data count in table for active roast
-        const dataCountElement = document.getElementById(`data-count-${activeRoastId}`);
-        console.log('Looking for data count element:', `data-count-${activeRoastId}`, 'Found:', !!dataCountElement);
-        if (dataCountElement) {
-            const currentCount = parseInt(dataCountElement.textContent) || 0;
-            dataCountElement.textContent = currentCount + 1;
-            console.log('Updated data count from', currentCount, 'to', currentCount + 1);
-        } else {
-            console.log('Data count element not found for roast:', activeRoastId);
+        // Stop polling if roast is no longer active
+        if (!result.is_active) {
+            console.log('Roast no longer active, stopping polling');
+            clearInterval(pollingInterval);
+            setTimeout(() => location.reload(), 1000);
         }
+        
+    } catch (error) {
+        console.error('Error polling for live data:', error);
     }
-});
+}
+
+// Start polling if there's an active roast
+let pollingInterval;
+if (activeRoastId) {
+    console.log('Starting live data polling for roast:', activeRoastId);
+    pollingInterval = setInterval(pollForLiveData, 1000); // Poll every 1 second
+}
 
 // Socket.IO event handlers
 socket.on('roast_started', (data) => {
@@ -275,6 +371,80 @@ socket.on('roast_started', (data) => {
 socket.on('roast_stopped', (data) => {
     console.log('Roast stopped:', data);
     setTimeout(() => location.reload(), 1000);
+});
+
+// Delete roast functionality
+const deleteModal = document.getElementById('deleteModal');
+const deleteMessage = document.getElementById('deleteMessage');
+const cancelDeleteBtn = document.getElementById('cancelDelete');
+const confirmDeleteBtn = document.getElementById('confirmDelete');
+let currentDeleteRoastId = null;
+
+// Show delete modal
+function showDeleteModal(roastId, roastName) {
+    currentDeleteRoastId = roastId;
+    deleteMessage.textContent = `"${roastName}" will be permanently deleted.`;
+    deleteModal.classList.remove('hidden');
+    deleteModal.classList.add('flex');
+}
+
+// Hide delete modal
+function hideDeleteModal() {
+    deleteModal.classList.add('hidden');
+    deleteModal.classList.remove('flex');
+    currentDeleteRoastId = null;
+}
+
+// Delete roast function
+async function deleteRoast(roastId) {
+    try {
+        const response = await fetch(`/api/roasts/${roastId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            location.reload(); // Refresh to show updated list
+        } else {
+            const error = await response.json();
+            alert('Error deleting roast: ' + error.error);
+        }
+    } catch (error) {
+        alert('Error deleting roast: ' + error.message);
+    }
+}
+
+// Event listeners for delete buttons
+document.addEventListener('click', (e) => {
+    if (e.target.closest('.delete-roast-btn')) {
+        const btn = e.target.closest('.delete-roast-btn');
+        const roastId = btn.dataset.roastId;
+        const roastName = btn.dataset.roastName;
+        showDeleteModal(roastId, roastName);
+    }
+});
+
+// Modal event listeners
+cancelDeleteBtn.addEventListener('click', hideDeleteModal);
+
+confirmDeleteBtn.addEventListener('click', () => {
+    if (currentDeleteRoastId) {
+        deleteRoast(currentDeleteRoastId);
+        hideDeleteModal();
+    }
+});
+
+// Close modal on backdrop click
+deleteModal.addEventListener('click', (e) => {
+    if (e.target === deleteModal) {
+        hideDeleteModal();
+    }
+});
+
+// Close modal on escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !deleteModal.classList.contains('hidden')) {
+        hideDeleteModal();
+    }
 });
 
 </script>

@@ -218,3 +218,122 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Failed to get active roast session: {e}")
             return None
+    
+    def get_data_since(self, roast_id: str, since_timestamp: str) -> List[Dict]:
+        """Get data points for a roast session since a specific timestamp"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    SELECT timestamp, sensor_name, metric_type, value, unit
+                    FROM data_points
+                    WHERE roast_id = ? AND timestamp > ?
+                    ORDER BY timestamp
+                ''', (roast_id, since_timestamp))
+                
+                return [dict(row) for row in cursor.fetchall()]
+                
+        except Exception as e:
+            logger.error(f"Failed to get data since {since_timestamp}: {e}")
+            return []
+    
+    def get_latest_data_point(self, roast_id: str) -> Optional[Dict]:
+        """Get the most recent data point for a roast session"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    SELECT timestamp, sensor_name, metric_type, value, unit
+                    FROM data_points
+                    WHERE roast_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                ''', (roast_id,))
+                
+                row = cursor.fetchone()
+                return dict(row) if row else None
+                
+        except Exception as e:
+            logger.error(f"Failed to get latest data point: {e}")
+            return None
+    
+    def get_roast_activity_status(self, roast_id: str) -> Dict:
+        """Check if a roast has recent data activity"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                # Get latest data point timestamp
+                cursor.execute('''
+                    SELECT timestamp
+                    FROM data_points
+                    WHERE roast_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                ''', (roast_id,))
+                
+                row = cursor.fetchone()
+                if not row or not row['timestamp']:
+                    return {
+                        'has_data': False,
+                        'last_data_time': None,
+                        'minutes_since_last_data': None,
+                        'is_recently_active': False
+                    }
+                
+                from datetime import datetime
+                last_data_time = datetime.fromisoformat(row['timestamp'])
+                now = datetime.now()
+                minutes_since = (now - last_data_time).total_seconds() / 60
+                
+                # Consider "recently active" if data within last 5 minutes
+                is_recently_active = minutes_since <= 5
+                
+                return {
+                    'has_data': True,
+                    'last_data_time': last_data_time.isoformat(),
+                    'minutes_since_last_data': minutes_since,
+                    'is_recently_active': is_recently_active
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to get roast activity status: {e}")
+            return {
+                'has_data': False,
+                'last_data_time': None,
+                'minutes_since_last_data': None,
+                'is_recently_active': False
+            }
+    
+    def delete_roast_session(self, roast_id: str) -> bool:
+        """Delete a roast session and all its data points"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # First delete all data points for this roast
+                cursor.execute('''
+                    DELETE FROM data_points WHERE roast_id = ?
+                ''', (roast_id,))
+                
+                # Then delete the roast session
+                cursor.execute('''
+                    DELETE FROM roast_sessions WHERE id = ?
+                ''', (roast_id,))
+                
+                if cursor.rowcount > 0:
+                    conn.commit()
+                    logger.info(f"Deleted roast session and data: {roast_id}")
+                    return True
+                else:
+                    logger.warning(f"No roast session found to delete: {roast_id}")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Failed to delete roast session: {e}")
+            return False

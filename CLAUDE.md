@@ -58,7 +58,8 @@ pip install -r requirements.txt
 ### Key Design Patterns
 
 - **Threaded Sensor Reading**: All sensor operations run in a dedicated thread to avoid GPIO conflicts
-- **WebSocket Communication**: Real-time data updates pushed to web clients via SocketIO
+- **HTTP Polling**: Real-time data updates via 1-second HTTP polling (eliminates SocketIO threading issues)
+- **WebSocket for Events**: SocketIO used only for session start/stop events
 - **Configuration-Driven**: Sensor setup defined in JSON config file
 - **Session-Based Logging**: Data collection only occurs during active roast sessions
 
@@ -66,8 +67,9 @@ pip install -r requirements.txt
 
 1. Sensor Manager continuously reads from configured sensors (2-second intervals)
 2. Data Collector monitors for active roast sessions
-3. During active sessions, sensor data is stored in database and broadcast via WebSocket
-4. Web interface displays real-time charts and historical roast data
+3. During active sessions, sensor data is stored in database only
+4. Web interface polls `/api/roasts/{id}/live-data` every 1 second for real-time updates
+5. SocketIO handles session start/stop events for instant feedback
 
 ### File Structure
 
@@ -91,6 +93,12 @@ config.json             # Application configuration
 - The application is designed for Raspberry Pi with GPIO access for sensors
 - SQLite database automatically initializes required tables on first run
 - Web interface uses Tailwind CSS for styling
-- Real-time updates require WebSocket connection
+- Real-time updates use 1-second HTTP polling (more reliable than WebSocket threading)
+- SocketIO is used only for session start/stop events
 - Sensor readings are cached to handle sensor failures gracefully
 - Only one active roast session is allowed at a time
+- New API endpoint: `GET /api/roasts/{id}/live-data?since={timestamp}` for polling updates
+
+## Claude Interaction Guidelines
+
+- Always ask me to start the application
