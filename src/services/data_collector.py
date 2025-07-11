@@ -38,6 +38,11 @@ class DataCollector:
         logger.info(f"Started data collection for roast {roast_id}")
         return True
     
+    def resume_collection(self, roast_id: str):
+        """Resume data collection for an existing roast session"""
+        logger.info(f"Resuming data collection for roast {roast_id}")
+        return self.start_collection(roast_id)
+    
     def stop_collection(self):
         """Stop data collection"""
         if not self.collecting:
@@ -110,27 +115,6 @@ class DataCollector:
                         
                         if success:
                             logger.info(f"Stored: {sensor_name} {metric_type}={value}{unit}")
-                            # Emit real-time data to connected clients
-                            sensor_event = {
-                                'roast_id': self.active_roast_id,
-                                'sensor_name': sensor_name,
-                                'metric_type': metric_type,
-                                'value': value,
-                                'unit': unit,
-                                'timestamp': timestamp
-                            }
-                            # Emit to all connected clients (from background thread)
-                            try:
-                                # Use background task approach for thread-safe emissions
-                                def emit_sensor_data():
-                                    self.socketio.emit('sensor_data', sensor_event)
-                                    logger.info(f"🔴 EMITTED SocketIO sensor_data: {metric_type}={value}{unit} to roast {self.active_roast_id}")
-                                
-                                # Start background task for emission
-                                self.socketio.start_background_task(emit_sensor_data)
-                                
-                            except Exception as emit_error:
-                                logger.error(f"❌ Failed to emit SocketIO data: {emit_error}")
                         else:
                             logger.warning(f"Failed to store data point: {sensor_name}")
                 else:

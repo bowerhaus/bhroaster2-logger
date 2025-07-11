@@ -191,6 +191,29 @@ def get_roast_data(roast_id):
     data = db_manager.get_roast_data(roast_id)
     return jsonify(data)
 
+@app.route('/api/roasts/<roast_id>/live-data', methods=['GET'])
+def get_live_data(roast_id):
+    """API endpoint to get live data updates since a timestamp"""
+    since_timestamp = request.args.get('since', '')
+    
+    # Get new data since the timestamp
+    if since_timestamp:
+        new_data = db_manager.get_data_since(roast_id, since_timestamp)
+    else:
+        # If no timestamp provided, get the latest data point
+        latest_data = db_manager.get_latest_data_point(roast_id)
+        new_data = [latest_data] if latest_data else []
+    
+    # Get current active session status
+    active_session = db_manager.get_active_roast_session()
+    is_active = active_session and active_session['id'] == roast_id
+    
+    return jsonify({
+        'data': new_data,
+        'is_active': is_active,
+        'timestamp': datetime.now().isoformat()
+    })
+
 @socketio.on('connect')
 def handle_connect():
     """Handle client connection"""
@@ -200,30 +223,6 @@ def handle_connect():
     active_session = db_manager.get_active_roast_session()
     if active_session:
         emit('roast_active', active_session)
-        
-        # Send latest sensor readings for dashboard
-        if sensors:
-            for sensor_name, sensor in sensors.items():
-                if hasattr(sensor, 'get_cached_reading'):
-                    data = sensor.get_cached_reading()
-                    if data:
-                        for metric_type, value in data.items():
-                            sensor_data = {
-                                'roast_id': active_session['id'],
-                                'sensor_name': sensor_name,
-                                'metric_type': metric_type,
-                                'value': value,
-                                'unit': '°C' if metric_type == 'temperature' else '%',
-                                'timestamp': datetime.now().isoformat()
-                            }
-                            emit('sensor_data', sensor_data)
-                            logger.debug(f"Sent initial sensor data to client: {sensor_data}")
-
-@socketio.on('test_connection')
-def handle_test_connection(data):
-    """Handle test connection from client"""
-    logger.info(f'🧪 Test connection received from client: {data}')
-    emit('test_response', {'status': 'server received test'})
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -251,6 +250,19 @@ def run_app():
         # Initialize data collector
         sample_rate = config['logging']['sample_rate']
         data_collector = DataCollector(sensors, db_manager, socketio, sample_rate)
+        
+        # Check for active roasts and close them (app restart should end active roasts)
+        active_session = db_manager.get_active_roast_session()
+        if active_session:
+            roast_id = active_session['id']
+            logger.info(f"🔍 Found active roast on startup: {active_session['name']} (ID: {roast_id})")
+            logger.info(f"🏁 App restart detected - automatically completing active roast")
+            
+            # Always mark active roasts as completed on app restart
+            db_manager.end_roast_session(roast_id)
+            logger.info(f"✅ Completed roast session: {roast_id}")
+        else:
+            logger.info("💤 No active roast sessions found on startup")
         
         # Start the application
         host = config['web']['host']

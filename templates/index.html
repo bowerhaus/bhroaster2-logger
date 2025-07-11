@@ -235,36 +235,64 @@ if (activeRoastId && activeRoastStartTime) {
     setInterval(updateDuration, 1000);
 }
 
-// Global sensor data listener (works for any active roast)
-socket.on('sensor_data', (data) => {
-    console.log('🟢 DASHBOARD received sensor data:', data);
+// Polling for live data updates (1 second interval)
+let lastUpdateTimestamp = '';
+
+async function pollForLiveData() {
+    if (!activeRoastId) return;
     
-    if (activeRoastId && data.roast_id === activeRoastId) {
-        // Update live sensor readings
-        if (data.metric_type === 'temperature') {
-            const tempElement = document.getElementById('liveTemp');
-            if (tempElement) {
-                tempElement.textContent = `${data.value.toFixed(1)}°C`;
-            }
-        } else if (data.metric_type === 'humidity') {
-            const humidityElement = document.getElementById('liveHumidity');
-            if (humidityElement) {
-                humidityElement.textContent = `${data.value.toFixed(1)}%`;
-            }
+    try {
+        const response = await fetch(`/api/roasts/${activeRoastId}/live-data?since=${lastUpdateTimestamp}`);
+        const result = await response.json();
+        
+        if (result.data && result.data.length > 0) {
+            console.log('🟢 DASHBOARD received live data:', result.data);
+            
+            // Process new data points
+            result.data.forEach(dataPoint => {
+                // Update live sensor readings
+                if (dataPoint.metric_type === 'temperature') {
+                    const tempElement = document.getElementById('liveTemp');
+                    if (tempElement) {
+                        tempElement.textContent = `${dataPoint.value.toFixed(1)}°C`;
+                    }
+                } else if (dataPoint.metric_type === 'humidity') {
+                    const humidityElement = document.getElementById('liveHumidity');
+                    if (humidityElement) {
+                        humidityElement.textContent = `${dataPoint.value.toFixed(1)}%`;
+                    }
+                }
+                
+                // Update data count in table for active roast
+                const dataCountElement = document.getElementById(`data-count-${activeRoastId}`);
+                if (dataCountElement) {
+                    const currentCount = parseInt(dataCountElement.textContent) || 0;
+                    dataCountElement.textContent = currentCount + 1;
+                }
+            });
+            
+            // Update timestamp for next poll
+            lastUpdateTimestamp = result.timestamp;
         }
         
-        // Update data count in table for active roast
-        const dataCountElement = document.getElementById(`data-count-${activeRoastId}`);
-        console.log('Looking for data count element:', `data-count-${activeRoastId}`, 'Found:', !!dataCountElement);
-        if (dataCountElement) {
-            const currentCount = parseInt(dataCountElement.textContent) || 0;
-            dataCountElement.textContent = currentCount + 1;
-            console.log('Updated data count from', currentCount, 'to', currentCount + 1);
-        } else {
-            console.log('Data count element not found for roast:', activeRoastId);
+        // Stop polling if roast is no longer active
+        if (!result.is_active) {
+            console.log('Roast no longer active, stopping polling');
+            clearInterval(pollingInterval);
+            setTimeout(() => location.reload(), 1000);
         }
+        
+    } catch (error) {
+        console.error('Error polling for live data:', error);
     }
-});
+}
+
+// Start polling if there's an active roast
+let pollingInterval;
+if (activeRoastId) {
+    console.log('Starting live data polling for roast:', activeRoastId);
+    pollingInterval = setInterval(pollForLiveData, 1000); // Poll every 1 second
+}
 
 // Socket.IO event handlers
 socket.on('roast_started', (data) => {

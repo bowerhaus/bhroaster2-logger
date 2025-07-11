@@ -63,7 +63,7 @@ A Python-based data logging application for coffee roasting that captures temper
 - **Backend**: Python Flask/FastAPI web server
 - **Frontend**: HTML/JavaScript with Tailwind CSS
 - **Database**: SQLite for roast data storage
-- **Real-time**: WebSockets for live updates
+- **Real-time**: HTTP polling (1-second intervals) for live updates
 - **Sensor Interface**: GPIO/I2C libraries for sensor communication
 
 ### 3.2 Data Model
@@ -94,7 +94,8 @@ A Python-based data logging application for coffee roasting that captures temper
 - `PUT /roasts/{id}/stop` - Stop active roast
 - `GET /roasts/{id}` - Get roast details and data
 - `GET /roasts/{id}/data` - Get roast data points
-- `WebSocket /roasts/{id}/live` - Live data stream
+- `GET /roasts/{id}/live-data` - Get live data updates since timestamp
+- `WebSocket /session-events` - Session start/stop notifications
 
 ## 4. Feature Specifications
 
@@ -153,7 +154,7 @@ A Python-based data logging application for coffee roasting that captures temper
 ### 6.2 Performance Requirements
 - 1-second data collection reliability
 - Web interface response < 2 seconds
-- Real-time updates with < 3-second latency
+- Real-time updates with 1-second polling latency
 - Handle 100+ roast sessions without performance degradation
 
 ## 7. Success Criteria

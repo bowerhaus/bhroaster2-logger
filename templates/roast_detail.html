@@ -299,90 +299,120 @@ let roastStartTime = roastData[0] ? new Date(roastData[0].timestamp) : null;
 
 console.log('Roast detail page loaded for roast:', roastId, 'Active:', isActive);
 
-// Global sensor data listener
-socket.on('sensor_data', (data) => {
-    console.log('🟢 CHART received sensor data:', data);
+// Polling for live data updates (1 second interval)
+let lastUpdateTimestamp = '';
+
+async function pollForLiveData() {
+    if (!isActive) return;
     
-    if (data.roast_id === roastId) {
-        const timestamp = new Date(data.timestamp);
+    try {
+        const response = await fetch(`/api/roasts/${roastId}/live-data?since=${lastUpdateTimestamp}`);
+        const result = await response.json();
         
-        // Set start time if not already set
-        if (!roastStartTime) {
-            roastStartTime = timestamp;
-            console.log('Set roast start time:', roastStartTime);
-        }
-        
-        const elapsedMinutes = (timestamp - roastStartTime) / 60000;
-        console.log('Elapsed minutes:', elapsedMinutes);
-        
-        if (data.metric_type === 'temperature') {
-            chart.data.datasets[0].data.push({x: elapsedMinutes, y: data.value});
-            const currentTempElement = document.getElementById('currentTemp');
-            if (currentTempElement) {
-                currentTempElement.textContent = `${data.value.toFixed(1)}°C`;
+        if (result.data && result.data.length > 0) {
+            console.log('🟢 CHART received live data:', result.data);
+            
+            // Process new data points
+            result.data.forEach(dataPoint => {
+                const timestamp = new Date(dataPoint.timestamp);
+                
+                // Set start time if not already set
+                if (!roastStartTime) {
+                    roastStartTime = timestamp;
+                    console.log('Set roast start time:', roastStartTime);
+                }
+                
+                const elapsedMinutes = (timestamp - roastStartTime) / 60000;
+                
+                if (dataPoint.metric_type === 'temperature') {
+                    chart.data.datasets[0].data.push({x: elapsedMinutes, y: dataPoint.value});
+                    const currentTempElement = document.getElementById('currentTemp');
+                    if (currentTempElement) {
+                        currentTempElement.textContent = `${dataPoint.value.toFixed(1)}°C`;
+                    }
+                    
+                    // Update peak temperature
+                    const peakTempElement = document.getElementById('peakTemp');
+                    if (peakTempElement) {
+                        const currentPeak = parseFloat(peakTempElement.textContent) || 0;
+                        if (dataPoint.value > currentPeak) {
+                            peakTempElement.textContent = `${dataPoint.value.toFixed(1)}°C`;
+                        }
+                    }
+                } else if (dataPoint.metric_type === 'humidity') {
+                    chart.data.datasets[1].data.push({x: elapsedMinutes, y: dataPoint.value});
+                    const currentHumidityElement = document.getElementById('currentHumidity');
+                    if (currentHumidityElement) {
+                        currentHumidityElement.textContent = `${dataPoint.value.toFixed(1)}%`;
+                    }
+                    
+                    // Update average humidity
+                    const humidityData = chart.data.datasets[1].data;
+                    if (humidityData.length > 0) {
+                        const avgHumidity = humidityData.reduce((sum, point) => sum + point.y, 0) / humidityData.length;
+                        const avgHumidityElement = document.getElementById('avgHumidity');
+                        if (avgHumidityElement) {
+                            avgHumidityElement.textContent = `${avgHumidity.toFixed(1)}%`;
+                        }
+                    }
+                }
+                
+                // Update data count
+                const dataCountElement = document.getElementById('dataCount');
+                if (dataCountElement) {
+                    const currentCount = parseInt(dataCountElement.textContent) || 0;
+                    dataCountElement.textContent = currentCount + 1;
+                }
+                
+                // Update duration
+                const duration = (timestamp - roastStartTime) / 1000;
+                const minutes = Math.floor(duration / 60);
+                const seconds = Math.floor(duration % 60);
+                const durationElement = document.getElementById('duration');
+                if (durationElement) {
+                    durationElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                }
+            });
+            
+            // Update chart after processing all data points
+            chart.update('none');
+            
+            // Auto-scale the x-axis to show recent data
+            if (chart.data.datasets[0].data.length > 0 || chart.data.datasets[1].data.length > 0) {
+                const allData = [...chart.data.datasets[0].data, ...chart.data.datasets[1].data];
+                if (allData.length > 0) {
+                    const maxTime = Math.max(...allData.map(p => p.x));
+                    if (maxTime > 10) { // If more than 10 minutes, show last 10 minutes
+                        chart.options.scales.x.min = Math.max(0, maxTime - 10);
+                        chart.options.scales.x.max = maxTime + 1;
+                        chart.update('none');
+                    }
+                }
             }
             
-            // Update peak temperature
-            const peakTempElement = document.getElementById('peakTemp');
-            if (peakTempElement) {
-                const currentPeak = parseFloat(peakTempElement.textContent) || 0;
-                if (data.value > currentPeak) {
-                    peakTempElement.textContent = `${data.value.toFixed(1)}°C`;
-                }
-            }
-        } else if (data.metric_type === 'humidity') {
-            chart.data.datasets[1].data.push({x: elapsedMinutes, y: data.value});
-            const currentHumidityElement = document.getElementById('currentHumidity');
-            if (currentHumidityElement) {
-                currentHumidityElement.textContent = `${data.value.toFixed(1)}%`;
-            }
-            
-            // Update average humidity
-            const humidityData = chart.data.datasets[1].data;
-            if (humidityData.length > 0) {
-                const avgHumidity = humidityData.reduce((sum, point) => sum + point.y, 0) / humidityData.length;
-                const avgHumidityElement = document.getElementById('avgHumidity');
-                if (avgHumidityElement) {
-                    avgHumidityElement.textContent = `${avgHumidity.toFixed(1)}%`;
-                }
-            }
+            // Update timestamp for next poll
+            lastUpdateTimestamp = result.timestamp;
+            console.log('Updated chart with new data points');
         }
         
-        // Update data count
-        const dataCountElement = document.getElementById('dataCount');
-        if (dataCountElement) {
-            const currentCount = parseInt(dataCountElement.textContent) || 0;
-            dataCountElement.textContent = currentCount + 1;
+        // Stop polling if roast is no longer active
+        if (!result.is_active) {
+            console.log('Roast no longer active, stopping polling');
+            clearInterval(pollingInterval);
+            setTimeout(() => location.reload(), 1000);
         }
         
-        // Update duration
-        const duration = (timestamp - roastStartTime) / 1000;
-        const minutes = Math.floor(duration / 60);
-        const seconds = Math.floor(duration % 60);
-        const durationElement = document.getElementById('duration');
-        if (durationElement) {
-            durationElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        }
-        
-        // Update chart
-        chart.update('none'); // Use 'none' for better performance
-        
-        // Auto-scale the x-axis to show recent data
-        if (chart.data.datasets[0].data.length > 0 || chart.data.datasets[1].data.length > 0) {
-            const allData = [...chart.data.datasets[0].data, ...chart.data.datasets[1].data];
-            if (allData.length > 0) {
-                const maxTime = Math.max(...allData.map(p => p.x));
-                if (maxTime > 10) { // If more than 10 minutes, show last 10 minutes
-                    chart.options.scales.x.min = Math.max(0, maxTime - 10);
-                    chart.options.scales.x.max = maxTime + 1;
-                    chart.update('none');
-                }
-            }
-        }
-        
-        console.log('Updated chart with new data point');
+    } catch (error) {
+        console.error('Error polling for live data:', error);
     }
-});
+}
+
+// Start polling if roast is active
+let pollingInterval;
+if (isActive) {
+    console.log('Starting live data polling for roast:', roastId);
+    pollingInterval = setInterval(pollForLiveData, 1000); // Poll every 1 second
+}
 
 // Handle stop roast
 const stopRoastBtn = document.getElementById('stopRoastBtn');
