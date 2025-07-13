@@ -5,6 +5,14 @@
       "name": "SHT31",
       "i2c_address": 68,
       "metrics": ["temperature", "humidity"]
+    },
+    {
+      "type": "SGP30",
+      "name": "SGP30",
+      "i2c_address": 88,
+      "baseline_co2": 35443,
+      "baseline_tvoc": 35502,
+      "metrics": ["co2", "voc"]
     }
   ],
   "database": {

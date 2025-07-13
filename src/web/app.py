@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from database.models import DatabaseManager
 from sensors.managed_dht22 import ManagedDHT22Sensor
 from sensors.managed_sht31 import ManagedSHT31Sensor
+from sensors.managed_sgp30 import ManagedSGP30Sensor
 from sensors.sensor_manager import sensor_manager
 from services.data_collector import DataCollector
 
@@ -60,6 +61,13 @@ def initialize_sensors(config):
                 logger.error(f"Failed to initialize sensor: {sensor_name}")
         elif sensor_type == 'SHT31':
             sensor = ManagedSHT31Sensor(sensor_name, sensor_config)
+            if sensor.initialize():
+                sensors[sensor_name] = sensor
+                logger.info(f"Initialized sensor: {sensor_name}")
+            else:
+                logger.error(f"Failed to initialize sensor: {sensor_name}")
+        elif sensor_type == 'SGP30':
+            sensor = ManagedSGP30Sensor(sensor_name, sensor_config)
             if sensor.initialize():
                 sensors[sensor_name] = sensor
                 logger.info(f"Initialized sensor: {sensor_name}")

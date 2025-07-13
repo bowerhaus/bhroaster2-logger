@@ -102,7 +102,15 @@ class DataCollector:
                     for metric_type, value in data.items():
                         # Create unique timestamp for each data point
                         timestamp = datetime.now().isoformat()
-                        unit = '°C' if metric_type == 'temperature' else '%'
+                        
+                        # Map metric types to units
+                        unit_map = {
+                            'temperature': '°C',
+                            'humidity': '%',
+                            'co2': 'ppm',
+                            'voc': 'ppb'
+                        }
+                        unit = unit_map.get(metric_type, '')
                         
                         # Store in database
                         success = self.db_manager.add_data_point(
