@@ -54,22 +54,38 @@
         </div>
         
         <!-- Live Sensor Readings -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="glass-card rounded-lg p-4 border border-red-400">
-                <div class="text-sm text-red-300">Temperature</div>
-                <div class="text-2xl font-bold text-red-400" id="liveTemp">-</div>
-            </div>
-            <div class="glass-card rounded-lg p-4 border border-blue-400">
-                <div class="text-sm text-blue-300">Humidity</div>
-                <div class="text-2xl font-bold text-blue-400" id="liveHumidity">-</div>
-            </div>
+        <div class="grid grid-cols-2 md:grid-cols-8 gap-4">
             <div class="glass-card rounded-lg p-4 border border-amber-400">
                 <div class="text-sm text-amber-300">Duration</div>
                 <div class="text-2xl font-bold text-amber-400" id="liveDurationCard">-</div>
             </div>
+            <div class="glass-card rounded-lg p-4 border border-red-400">
+                <div class="text-sm text-red-300">Current Temp</div>
+                <div class="text-2xl font-bold text-red-400" id="liveTemp">-</div>
+            </div>
+            <div class="glass-card rounded-lg p-4 border border-blue-400">
+                <div class="text-sm text-blue-300">Current Humidity</div>
+                <div class="text-2xl font-bold text-blue-400" id="liveHumidity">-</div>
+            </div>
+            <div class="glass-card rounded-lg p-4 border border-purple-400">
+                <div class="text-sm text-purple-300">Current CO2</div>
+                <div class="text-2xl font-bold text-purple-400" id="liveCO2">-</div>
+            </div>
+            <div class="glass-card rounded-lg p-4 border border-orange-400">
+                <div class="text-sm text-orange-300">Current VOC</div>
+                <div class="text-2xl font-bold text-orange-400" id="liveVOC">-</div>
+            </div>
+            <div class="glass-card rounded-lg p-4 border border-red-400">
+                <div class="text-sm text-red-300">Peak Temp</div>
+                <div class="text-2xl font-bold text-red-400" id="livePeakTemp">-</div>
+            </div>
+            <div class="glass-card rounded-lg p-4 border border-blue-400">
+                <div class="text-sm text-blue-300">Avg Humidity</div>
+                <div class="text-2xl font-bold text-blue-400" id="liveAvgHumidity">-</div>
+            </div>
             <div class="glass-card rounded-lg p-4 border border-green-400">
                 <div class="text-sm text-green-300">Data Points</div>
-                <div class="text-2xl font-bold text-green-400" id="liveDataCount">-</div>
+                <div class="text-2xl font-bold text-green-400" id="liveDataCount">0</div>
             </div>
         </div>
     </div>
@@ -298,6 +314,9 @@ if (activeRoastId && activeRoastStartTime) {
 
 // Polling for live data updates (1 second interval)
 let lastUpdateTimestamp = '';
+let allTempValues = [];
+let allHumidityValues = [];
+let currentDataPointCount = 0;
 
 async function pollForLiveData() {
     if (!activeRoastId) return;
@@ -311,33 +330,61 @@ async function pollForLiveData() {
             
             // Process new data points
             result.data.forEach(dataPoint => {
+                currentDataPointCount++;
+                
                 // Update live sensor readings
                 if (dataPoint.metric_type === 'temperature') {
                     const tempElement = document.getElementById('liveTemp');
                     if (tempElement) {
                         tempElement.textContent = `${dataPoint.value.toFixed(1)}°C`;
                     }
+                    
+                    // Track for peak calculation
+                    allTempValues.push(dataPoint.value);
+                    const peakTempElement = document.getElementById('livePeakTemp');
+                    if (peakTempElement) {
+                        const peakTemp = Math.max(...allTempValues);
+                        peakTempElement.textContent = `${peakTemp.toFixed(1)}°C`;
+                    }
+                    
                 } else if (dataPoint.metric_type === 'humidity') {
                     const humidityElement = document.getElementById('liveHumidity');
                     if (humidityElement) {
                         humidityElement.textContent = `${dataPoint.value.toFixed(1)}%`;
                     }
-                }
-                
-                // Update data count in table for active roast
-                const dataCountElement = document.getElementById(`data-count-${activeRoastId}`);
-                if (dataCountElement) {
-                    const currentCount = parseInt(dataCountElement.textContent) || 0;
-                    dataCountElement.textContent = currentCount + 1;
-                }
-                
-                // Update live data count card
-                const liveDataCountElement = document.getElementById('liveDataCount');
-                if (liveDataCountElement) {
-                    const currentCount = parseInt(liveDataCountElement.textContent) || 0;
-                    liveDataCountElement.textContent = currentCount + 1;
+                    
+                    // Track for average calculation
+                    allHumidityValues.push(dataPoint.value);
+                    const avgHumidityElement = document.getElementById('liveAvgHumidity');
+                    if (avgHumidityElement) {
+                        const avgHumidity = allHumidityValues.reduce((sum, val) => sum + val, 0) / allHumidityValues.length;
+                        avgHumidityElement.textContent = `${avgHumidity.toFixed(1)}%`;
+                    }
+                    
+                } else if (dataPoint.metric_type === 'co2') {
+                    const co2Element = document.getElementById('liveCO2');
+                    if (co2Element) {
+                        co2Element.textContent = `${dataPoint.value.toFixed(0)} ppm`;
+                    }
+                    
+                } else if (dataPoint.metric_type === 'voc') {
+                    const vocElement = document.getElementById('liveVOC');
+                    if (vocElement) {
+                        vocElement.textContent = `${dataPoint.value.toFixed(0)} ppb`;
+                    }
                 }
             });
+            
+            // Update data count displays
+            const dataCountElement = document.getElementById(`data-count-${activeRoastId}`);
+            if (dataCountElement) {
+                dataCountElement.textContent = currentDataPointCount;
+            }
+            
+            const liveDataCountElement = document.getElementById('liveDataCount');
+            if (liveDataCountElement) {
+                liveDataCountElement.textContent = currentDataPointCount;
+            }
             
             // Update timestamp for next poll
             lastUpdateTimestamp = result.timestamp;
@@ -352,6 +399,18 @@ async function pollForLiveData() {
         
     } catch (error) {
         console.error('Error polling for live data:', error);
+    }
+}
+
+// Initialize data point count from existing table data
+if (activeRoastId) {
+    const existingCountElement = document.getElementById(`data-count-${activeRoastId}`);
+    if (existingCountElement) {
+        currentDataPointCount = parseInt(existingCountElement.textContent) || 0;
+        const liveDataCountElement = document.getElementById('liveDataCount');
+        if (liveDataCountElement) {
+            liveDataCountElement.textContent = currentDataPointCount;
+        }
     }
 }
 

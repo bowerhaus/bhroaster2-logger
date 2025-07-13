@@ -39,7 +39,7 @@
         </div>
         
         <!-- Metrics Banner -->
-        <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+        <div class="grid grid-cols-2 md:grid-cols-8 gap-4">
             <div class="glass-card rounded-lg p-4 border border-amber-400">
                 <div class="text-sm text-amber-300">Duration</div>
                 <div class="text-2xl font-bold text-amber-400" id="duration">-</div>
@@ -60,6 +60,25 @@
             </div>
             <div class="glass-card rounded-lg p-4 border border-gray-600">
                 <div class="text-sm text-gray-300">Current Humidity</div>
+                <div class="text-2xl font-bold text-gray-400">-</div>
+            </div>
+            {% endif %}
+            {% if roast_session.status == 'active' %}
+            <div class="glass-card rounded-lg p-4 border border-purple-400">
+                <div class="text-sm text-purple-300">Current CO2</div>
+                <div class="text-2xl font-bold text-purple-400" id="currentCO2">-</div>
+            </div>
+            <div class="glass-card rounded-lg p-4 border border-orange-400">
+                <div class="text-sm text-orange-300">Current VOC</div>
+                <div class="text-2xl font-bold text-orange-400" id="currentVOC">-</div>
+            </div>
+            {% else %}
+            <div class="glass-card rounded-lg p-4 border border-gray-600">
+                <div class="text-sm text-gray-300">Current CO2</div>
+                <div class="text-2xl font-bold text-gray-400">-</div>
+            </div>
+            <div class="glass-card rounded-lg p-4 border border-gray-600">
+                <div class="text-sm text-gray-300">Current VOC</div>
                 <div class="text-2xl font-bold text-gray-400">-</div>
             </div>
             {% endif %}
@@ -85,7 +104,7 @@
                 <i class="fas fa-chart-line mr-2"></i>
                 Roast Profile
             </h3>
-            <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-4 flex-wrap">
                 <div class="flex items-center">
                     <div class="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
                     <span class="text-sm text-red-300">Temperature (°C)</span>
@@ -93,6 +112,14 @@
                 <div class="flex items-center">
                     <div class="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
                     <span class="text-sm text-blue-300">Humidity (%)</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-3 h-3 bg-purple-500 rounded-full mr-2"></div>
+                    <span class="text-sm text-purple-300">CO2 (ppm)</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-3 h-3 bg-orange-500 rounded-full mr-2"></div>
+                    <span class="text-sm text-orange-300">VOC (ppb)</span>
                 </div>
             </div>
         </div>
@@ -132,6 +159,24 @@ const chart = new Chart(ctx, {
             backgroundColor: 'rgba(59, 130, 246, 0.1)',
             tension: 0.1,
             yAxisID: 'y1',
+            pointRadius: 0,
+            pointHoverRadius: 3
+        }, {
+            label: 'CO2 (ppm)',
+            data: [],
+            borderColor: 'rgb(147, 51, 234)',
+            backgroundColor: 'rgba(147, 51, 234, 0.1)',
+            tension: 0.1,
+            yAxisID: 'y2',
+            pointRadius: 0,
+            pointHoverRadius: 3
+        }, {
+            label: 'VOC (ppb)',
+            data: [],
+            borderColor: 'rgb(249, 115, 22)',
+            backgroundColor: 'rgba(249, 115, 22, 0.1)',
+            tension: 0.1,
+            yAxisID: 'y3',
             pointRadius: 0,
             pointHoverRadius: 3
         }]
@@ -184,6 +229,30 @@ const chart = new Chart(ctx, {
                 grid: {
                     drawOnChartArea: false,
                 },
+            },
+            y2: {
+                type: 'linear',
+                display: false,
+                position: 'left',
+                title: {
+                    display: false,
+                    text: 'CO2 (ppm)'
+                },
+                grid: {
+                    drawOnChartArea: false,
+                },
+            },
+            y3: {
+                type: 'linear',
+                display: false,
+                position: 'right',
+                title: {
+                    display: false,
+                    text: 'VOC (ppb)'
+                },
+                grid: {
+                    drawOnChartArea: false,
+                },
             }
         },
         plugins: {
@@ -204,13 +273,21 @@ if (roastData.length > 0) {
     const startTime = new Date(roastData[0].timestamp);
     const tempData = [];
     const humidityData = [];
+    const co2Data = [];
+    const vocData = [];
     const labels = [];
     
     let totalTemp = 0;
     let totalHumidity = 0;
+    let totalCO2 = 0;
+    let totalVOC = 0;
     let tempCount = 0;
     let humidityCount = 0;
+    let co2Count = 0;
+    let vocCount = 0;
     let maxTemp = -Infinity;
+    let maxCO2 = -Infinity;
+    let maxVOC = -Infinity;
     
     roastData.forEach((point, index) => {
         const timestamp = new Date(point.timestamp);
@@ -231,16 +308,30 @@ if (roastData.length > 0) {
             humidityData.push({x: elapsedMinutes, y: point.value});
             totalHumidity += point.value;
             humidityCount++;
+        } else if (point.metric_type === 'co2') {
+            co2Data.push({x: elapsedMinutes, y: point.value});
+            totalCO2 += point.value;
+            co2Count++;
+            maxCO2 = Math.max(maxCO2, point.value);
+        } else if (point.metric_type === 'voc') {
+            vocData.push({x: elapsedMinutes, y: point.value});
+            totalVOC += point.value;
+            vocCount++;
+            maxVOC = Math.max(maxVOC, point.value);
         }
     });
     
     // Debug: Log chart data
     console.log('Temperature data points:', tempData.slice(0, 5));
     console.log('Humidity data points:', humidityData.slice(0, 5));
+    console.log('CO2 data points:', co2Data.slice(0, 5));
+    console.log('VOC data points:', vocData.slice(0, 5));
     
     // Update chart
     chart.data.datasets[0].data = tempData;
     chart.data.datasets[1].data = humidityData;
+    chart.data.datasets[2].data = co2Data;
+    chart.data.datasets[3].data = vocData;
     chart.update();
     
     // Update statistics
@@ -316,6 +407,18 @@ async function pollForLiveData() {
                             avgHumidityElement.textContent = `${avgHumidity.toFixed(1)}%`;
                         }
                     }
+                } else if (dataPoint.metric_type === 'co2') {
+                    chart.data.datasets[2].data.push({x: elapsedMinutes, y: dataPoint.value});
+                    const currentCO2Element = document.getElementById('currentCO2');
+                    if (currentCO2Element) {
+                        currentCO2Element.textContent = `${dataPoint.value.toFixed(0)} ppm`;
+                    }
+                } else if (dataPoint.metric_type === 'voc') {
+                    chart.data.datasets[3].data.push({x: elapsedMinutes, y: dataPoint.value});
+                    const currentVOCElement = document.getElementById('currentVOC');
+                    if (currentVOCElement) {
+                        currentVOCElement.textContent = `${dataPoint.value.toFixed(0)} ppb`;
+                    }
                 }
                 
                 // Update data count
@@ -339,15 +442,18 @@ async function pollForLiveData() {
             chart.update('none');
             
             // Auto-scale the x-axis to show recent data
-            if (chart.data.datasets[0].data.length > 0 || chart.data.datasets[1].data.length > 0) {
-                const allData = [...chart.data.datasets[0].data, ...chart.data.datasets[1].data];
-                if (allData.length > 0) {
-                    const maxTime = Math.max(...allData.map(p => p.x));
-                    if (maxTime > 10) { // If more than 10 minutes, show last 10 minutes
-                        chart.options.scales.x.min = Math.max(0, maxTime - 10);
-                        chart.options.scales.x.max = maxTime + 1;
-                        chart.update('none');
-                    }
+            const allData = [
+                ...chart.data.datasets[0].data, 
+                ...chart.data.datasets[1].data,
+                ...chart.data.datasets[2].data,
+                ...chart.data.datasets[3].data
+            ];
+            if (allData.length > 0) {
+                const maxTime = Math.max(...allData.map(p => p.x));
+                if (maxTime > 10) { // If more than 10 minutes, show last 10 minutes
+                    chart.options.scales.x.min = Math.max(0, maxTime - 10);
+                    chart.options.scales.x.max = maxTime + 1;
+                    chart.update('none');
                 }
             }
             

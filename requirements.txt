@@ -2,5 +2,6 @@ flask==2.3.3
 flask-socketio==5.3.6
 adafruit-circuitpython-dht
 adafruit-circuitpython-sht31d
+adafruit-circuitpython-sgp30
 python-socketio[client]
 eventlet
