@@ -25,5 +25,8 @@
   "logging": {
     "sample_rate": 1,
     "level": "INFO"
+  },
+  "alerts": {
+    "MAX_TEMPERATURE_ALERT": 125
   }
 }

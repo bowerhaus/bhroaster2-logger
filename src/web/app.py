@@ -216,9 +216,32 @@ def get_live_data(roast_id):
     active_session = db_manager.get_active_roast_session()
     is_active = active_session and active_session['id'] == roast_id
     
+    # Get temperature alert threshold from config
+    config = load_config()
+    max_temp_alert = config.get('alerts', {}).get('MAX_TEMPERATURE_ALERT', 125)
+    
+    # Check if current temperature exceeds alert threshold
+    temp_alert = False
+    latest_temp = None
+    for data_point in reversed(new_data):
+        if data_point['metric_type'] == 'temperature':
+            latest_temp = data_point['value']
+            temp_alert = latest_temp >= max_temp_alert
+            break
+    
+    # If no new data, check the latest temperature from database
+    if latest_temp is None and not new_data:
+        latest_data = db_manager.get_latest_data_point(roast_id)
+        if latest_data and latest_data['metric_type'] == 'temperature':
+            latest_temp = latest_data['value']
+            temp_alert = latest_temp >= max_temp_alert
+    
     return jsonify({
         'data': new_data,
         'is_active': is_active,
+        'temperature_alert': temp_alert,
+        'latest_temperature': latest_temp,
+        'max_temp_threshold': max_temp_alert,
         'timestamp': datetime.now().isoformat()
     })
 
