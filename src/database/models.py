@@ -56,7 +56,7 @@ class DatabaseManager:
                     )
                 ''')
                 
-                # Create first_crack_events table
+                # Create first_crack_events table (manual markings)
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS first_crack_events (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,6 +67,21 @@ class DatabaseManager:
                         signal_scores TEXT,
                         current_temperature REAL,
                         notes TEXT,
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (roast_id) REFERENCES roast_sessions (id)
+                    )
+                ''')
+                
+                # Create first_crack_predictions table (automated predictions)
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS first_crack_predictions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        roast_id TEXT NOT NULL,
+                        timestamp TEXT NOT NULL,
+                        confidence_score REAL NOT NULL,
+                        signal_scores TEXT,
+                        predicted_temperature REAL,
+                        prediction_algorithm TEXT DEFAULT 'multi_signal_v1',
                         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (roast_id) REFERENCES roast_sessions (id)
                     )
@@ -86,6 +101,11 @@ class DatabaseManager:
                 cursor.execute('''
                     CREATE INDEX IF NOT EXISTS idx_first_crack_events_roast_id 
                     ON first_crack_events (roast_id)
+                ''')
+                
+                cursor.execute('''
+                    CREATE INDEX IF NOT EXISTS idx_first_crack_predictions_roast_id 
+                    ON first_crack_predictions (roast_id)
                 ''')
                 
                 conn.commit()
@@ -540,3 +560,116 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Failed to delete first crack event: {e}")
             return False
+    
+    def add_first_crack_prediction(self, roast_id: str, timestamp: str, confidence_score: float,
+                                  signal_scores: Dict = None, predicted_temperature: float = None,
+                                  prediction_algorithm: str = 'multi_signal_v1') -> bool:
+        """Add a first crack prediction to the database"""
+        try:
+            import json
+            signal_scores_json = json.dumps(signal_scores) if signal_scores else None
+            
+            logger.debug(f"Adding FC prediction: roast_id={roast_id}, timestamp={timestamp}, confidence={confidence_score}")
+            
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Check if roast session exists
+                cursor.execute('''
+                    SELECT id FROM roast_sessions WHERE id = ?
+                ''', (roast_id,))
+                
+                if not cursor.fetchone():
+                    logger.error(f"Roast session {roast_id} not found for prediction")
+                    return False
+                
+                # Delete existing prediction for this roast (replace with new one)
+                cursor.execute('''
+                    DELETE FROM first_crack_predictions WHERE roast_id = ?
+                ''', (roast_id,))
+                
+                # Insert new prediction
+                cursor.execute('''
+                    INSERT INTO first_crack_predictions 
+                    (roast_id, timestamp, confidence_score, signal_scores, 
+                     predicted_temperature, prediction_algorithm)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (roast_id, timestamp, confidence_score, signal_scores_json,
+                      predicted_temperature, prediction_algorithm))
+                
+                prediction_id = cursor.lastrowid
+                logger.debug(f"Inserted FC prediction with ID: {prediction_id}")
+                
+                conn.commit()
+                logger.info(f"Successfully added FC prediction for roast {roast_id} at {timestamp} (confidence: {confidence_score:.2f})")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to add FC prediction for roast {roast_id}: {e}", exc_info=True)
+            return False
+    
+    def get_first_crack_prediction(self, roast_id: str) -> Optional[Dict]:
+        """Get the first crack prediction for a roast session"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    SELECT * FROM first_crack_predictions WHERE roast_id = ?
+                    ORDER BY created_at DESC LIMIT 1
+                ''', (roast_id,))
+                
+                row = cursor.fetchone()
+                if row:
+                    result = dict(row)
+                    # Parse signal_scores JSON if present
+                    if result.get('signal_scores'):
+                        import json
+                        try:
+                            result['signal_scores'] = json.loads(result['signal_scores'])
+                        except json.JSONDecodeError:
+                            result['signal_scores'] = None
+                    return result
+                return None
+                
+        except Exception as e:
+            logger.error(f"Failed to get FC prediction: {e}")
+            return None
+    
+    def delete_first_crack_prediction(self, roast_id: str) -> bool:
+        """Delete the first crack prediction for a roast session"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    DELETE FROM first_crack_predictions WHERE roast_id = ?
+                ''', (roast_id,))
+                
+                if cursor.rowcount > 0:
+                    conn.commit()
+                    logger.info(f"Deleted FC prediction for roast {roast_id}")
+                    return True
+                else:
+                    logger.warning(f"No FC prediction found to delete for roast {roast_id}")
+                    return False
+                
+        except Exception as e:
+            logger.error(f"Failed to delete FC prediction: {e}")
+            return False
+    
+    def get_first_crack_summary(self, roast_id: str) -> Dict:
+        """Get both manual FC event and prediction for a roast"""
+        try:
+            manual_fc = self.get_first_crack_event(roast_id)
+            predicted_fc = self.get_first_crack_prediction(roast_id)
+            
+            return {
+                'manual': manual_fc,
+                'predicted': predicted_fc
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to get FC summary: {e}")
+            return {'manual': None, 'predicted': None}

@@ -159,19 +159,18 @@
 // Initialize Socket.IO connection
 const socket = io();
 
-// Custom plugin for first crack line
+// Custom plugin for first crack lines (both manual and predicted)
 const firstCrackPlugin = {
     id: 'firstCrackLine',
     afterDraw: function(chart) {
-        if (chart.fcMarkerX !== null && chart.fcMarkerX !== undefined) {
-            const ctx = chart.ctx;
-            const chartArea = chart.chartArea;
-            
-            // Calculate pixel position for the marker
-            const x = chart.scales.x.getPixelForValue(chart.fcMarkerX);
+        const ctx = chart.ctx;
+        const chartArea = chart.chartArea;
+        
+        // Draw manual FC marker (red)
+        if (chart.fcManualX !== null && chart.fcManualX !== undefined) {
+            const x = chart.scales.x.getPixelForValue(chart.fcManualX);
             
             if (x >= chartArea.left && x <= chartArea.right) {
-                // Draw dashed vertical line
                 ctx.save();
                 ctx.setLineDash([5, 5]);
                 ctx.strokeStyle = 'rgb(239, 68, 68)';
@@ -182,9 +181,8 @@ const firstCrackPlugin = {
                 ctx.stroke();
                 
                 // Draw label
-                const labelText = chart.fcMarkerLabel || 'FC';
+                const labelText = chart.fcManualLabel || 'FC (Manual)';
                 ctx.font = 'bold 12px Arial';
-                ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
                 ctx.textAlign = 'center';
                 
                 // Background for label
@@ -195,6 +193,43 @@ const firstCrackPlugin = {
                 const labelY = chartArea.top + 10;
                 
                 ctx.fillStyle = 'rgba(239, 68, 68, 0.8)';
+                ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
+                
+                // Label text
+                ctx.fillStyle = 'white';
+                ctx.fillText(labelText, x, labelY + 14);
+                
+                ctx.restore();
+            }
+        }
+        
+        // Draw predicted FC marker (orange)
+        if (chart.fcPredictedX !== null && chart.fcPredictedX !== undefined) {
+            const x = chart.scales.x.getPixelForValue(chart.fcPredictedX);
+            
+            if (x >= chartArea.left && x <= chartArea.right) {
+                ctx.save();
+                ctx.setLineDash([10, 3, 3, 3]); // Different dash pattern
+                ctx.strokeStyle = 'rgb(251, 146, 60)'; // Orange color
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(x, chartArea.top);
+                ctx.lineTo(x, chartArea.bottom);
+                ctx.stroke();
+                
+                // Draw label
+                const labelText = chart.fcPredictedLabel || 'FC (Predicted)';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                
+                // Background for label
+                const textMetrics = ctx.measureText(labelText);
+                const labelWidth = textMetrics.width + 8;
+                const labelHeight = 20;
+                const labelX = x - labelWidth / 2;
+                const labelY = chartArea.top + 35; // Offset below manual FC label
+                
+                ctx.fillStyle = 'rgba(251, 146, 60, 0.8)'; // Orange background
                 ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
                 
                 // Label text
@@ -608,6 +643,15 @@ async function pollForLiveData() {
             updateTemperatureChartColor(result.temperature_alert);
         }
         
+        // Update FC markers if FC data is available in the response
+        if (result.first_crack_event || result.first_crack_prediction) {
+            const fcSummary = {
+                manual: result.first_crack_event,
+                predicted: result.first_crack_prediction
+            };
+            updateFirstCrackMarkers(fcSummary);
+        }
+        
         // Stop polling if roast is no longer active
         if (!result.is_active) {
             console.log('Roast no longer active, stopping polling');
@@ -707,26 +751,56 @@ setupToggleControls();
 // First crack functionality
 let firstCrackEvent = null;
 
+function updateFirstCrackMarkers(fcSummary) {
+    // Clear existing markers
+    chart.fcManualX = null;
+    chart.fcManualLabel = null;
+    chart.fcPredictedX = null;
+    chart.fcPredictedLabel = null;
+    
+    if (fcSummary && fcSummary.manual) {
+        const fcTimestamp = new Date(fcSummary.manual.timestamp);
+        const elapsedMinutes = (fcTimestamp - roastStartTime) / 60000;
+        chart.fcManualX = elapsedMinutes;
+        chart.fcManualLabel = 'FC (Manual)';
+        console.log(`🔥 Manual FC marker at ${elapsedMinutes.toFixed(1)} minutes`);
+    }
+    
+    if (fcSummary && fcSummary.predicted) {
+        const fcTimestamp = new Date(fcSummary.predicted.timestamp);
+        const elapsedMinutes = (fcTimestamp - roastStartTime) / 60000;
+        chart.fcPredictedX = elapsedMinutes;
+        chart.fcPredictedLabel = `FC (Predicted ${(fcSummary.predicted.confidence_score * 100).toFixed(0)}%)`;
+        console.log(`🔥 Predicted FC marker at ${elapsedMinutes.toFixed(1)} minutes`);
+    }
+    
+    chart.update('none');
+}
+
+// Legacy function for backward compatibility
 function updateFirstCrackMarker(fcEvent) {
     if (!fcEvent) {
-        // Hide first crack marker
-        chart.fcMarkerX = null;
-        chart.fcMarkerLabel = null;
+        chart.fcManualX = null;
+        chart.fcManualLabel = null;
         chart.update('none');
         return;
     }
     
-    // Calculate elapsed time for first crack
     const fcTimestamp = new Date(fcEvent.timestamp);
     const elapsedMinutes = (fcTimestamp - roastStartTime) / 60000;
     
-    // Update marker position and label
-    chart.fcMarkerX = elapsedMinutes;
-    chart.fcMarkerLabel = fcEvent.detection_method === 'manual' ? 'FC (Manual)' : 
-        `FC (${(fcEvent.confidence_score * 100).toFixed(0)}%)`;
+    if (fcEvent.detection_method === 'manual') {
+        chart.fcManualX = elapsedMinutes;
+        chart.fcManualLabel = 'FC (Manual)';
+    } else if (fcEvent.detection_method === 'live_prediction') {
+        chart.fcManualX = elapsedMinutes;
+        chart.fcManualLabel = `FC (Live ${(fcEvent.confidence_score * 100).toFixed(0)}%)`;
+    } else {
+        chart.fcPredictedX = elapsedMinutes;
+        chart.fcPredictedLabel = `FC (Predicted ${(fcEvent.confidence_score * 100).toFixed(0)}%)`;
+    }
     
     chart.update('none');
-    
     console.log(`🔥 First crack marker updated at ${elapsedMinutes.toFixed(1)} minutes`);
 }
 
@@ -787,29 +861,71 @@ function markFirstCrackManually() {
     }
 }
 
-// Check for existing first crack event on page load
-fetch(`/api/roasts/${roastId}/first-crack`)
-    .then(response => {
+// Load both manual and predicted first crack data on page load
+async function loadFirstCrackData() {
+    try {
+        // Fetch manual FC event
+        const manualResponse = await fetch(`/api/roasts/${roastId}/first-crack`);
+        let manualFC = null;
+        if (manualResponse.ok) {
+            manualFC = await manualResponse.json();
+            firstCrackEvent = manualFC; // Keep for backward compatibility
+        } else if (manualResponse.status !== 404) {
+            console.error('Error fetching manual FC:', manualResponse.status);
+        }
+        
+        // Fetch predicted FC
+        const predictedResponse = await fetch(`/api/roasts/${roastId}/first-crack-prediction`);
+        let predictedFC = null;
+        if (predictedResponse.ok) {
+            predictedFC = await predictedResponse.json();
+        } else if (predictedResponse.status !== 404) {
+            console.error('Error fetching predicted FC:', predictedResponse.status);
+        }
+        
+        // Update markers with both manual and predicted
+        const fcSummary = {
+            manual: manualFC,
+            predicted: predictedFC
+        };
+        updateFirstCrackMarkers(fcSummary);
+        
+        console.log('Loaded FC data:', fcSummary);
+        
+        // If no prediction exists and roast is completed, generate one
+        if (!predictedFC && !isActive) {
+            generatePrediction();
+        }
+        
+    } catch (error) {
+        console.error('Error loading first crack data:', error);
+    }
+}
+
+// Generate FC prediction for completed roasts
+async function generatePrediction() {
+    try {
+        console.log('Generating FC prediction for roast:', roastId);
+        const response = await fetch(`/api/roasts/${roastId}/first-crack-prediction`, {
+            method: 'POST'
+        });
+        
         if (response.ok) {
-            return response.json();
-        } else if (response.status === 404) {
-            // No first crack event exists yet - this is normal
-            console.log('No first crack event found for this roast (this is normal)');
-            return null;
+            const result = await response.json();
+            console.log('FC prediction generated:', result);
+            // Reload the FC data to show the new prediction
+            loadFirstCrackData();
         } else {
-            throw new Error(`Failed to fetch first crack info: ${response.status}`);
+            const error = await response.json();
+            console.log('FC prediction not generated:', error.error);
         }
-    })
-    .then(fcEvent => {
-        if (fcEvent) {
-            firstCrackEvent = fcEvent;
-            updateFirstCrackMarker(fcEvent);
-            console.log('Loaded existing first crack event:', fcEvent);
-        }
-    })
-    .catch(error => {
-        console.error('Error fetching first crack info:', error);
-    });
+    } catch (error) {
+        console.error('Error generating FC prediction:', error);
+    }
+}
+
+// Load FC data when page loads
+loadFirstCrackData();
 
 // Socket event handlers for first crack
 socket.on('first_crack_detected', (data) => {
@@ -817,7 +933,7 @@ socket.on('first_crack_detected', (data) => {
         firstCrackEvent = data;
         updateFirstCrackMarker(data);
         
-        // Show notification
+        // Show notification for manual detection
         const notification = document.createElement('div');
         notification.className = 'fixed top-4 right-4 bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg z-50';
         notification.innerHTML = `
@@ -834,6 +950,32 @@ socket.on('first_crack_detected', (data) => {
                 notification.parentNode.removeChild(notification);
             }
         }, 5000);
+    }
+});
+
+// Socket event handler for live prediction updates
+socket.on('first_crack_predicted', (data) => {
+    if (data.roast_id === roastId) {
+        // Reload FC data to get updated prediction
+        loadFirstCrackData();
+        
+        // Show subtle notification for prediction updates
+        const notification = document.createElement('div');
+        notification.className = 'fixed top-4 right-4 bg-orange-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+        notification.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas fa-chart-line mr-2"></i>
+                <span>FC Prediction Updated (${(data.confidence_score * 100).toFixed(0)}% confidence)</span>
+            </div>
+        `;
+        document.body.appendChild(notification);
+        
+        // Remove notification after 3 seconds (shorter for predictions)
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 3000);
     }
 });
 

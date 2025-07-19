@@ -16,6 +16,7 @@ from sensors.managed_sgp30 import ManagedSGP30Sensor
 from sensors.sensor_manager import sensor_manager
 from services.data_collector import DataCollector
 from services.first_crack_detector import FirstCrackDetector
+from services.first_crack_predictor import FirstCrackPredictor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -39,7 +40,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 db_manager = None
 sensors = {}
 data_collector = None
-first_crack_detector = None
+first_crack_predictor = None
 
 def load_config():
     """Load configuration from config.json"""
@@ -297,45 +298,46 @@ def get_live_data(roast_id):
     active_session = db_manager.get_active_roast_session()
     is_active = active_session and active_session['id'] == roast_id
     
-    if is_active and first_crack_detector and enhanced_data:
-        # Get recent data for first crack analysis (last 2 minutes)
-        recent_data = db_manager.get_data_since(roast_id, 
-            (datetime.now() - timedelta(minutes=2)).isoformat())
-        
-        # Add computed metrics to recent data for analysis
-        recent_enhanced = add_computed_metrics(recent_data)
-        
-        # Check if first crack already detected
-        existing_fc = db_manager.get_first_crack_event(roast_id)
-        
-        if not existing_fc and recent_enhanced:
-            # Analyze for first crack
-            current_timestamp = enhanced_data[-1]['timestamp']
-            fc_result = first_crack_detector.analyze_data_point(recent_enhanced, current_timestamp)
+    if is_active and first_crack_predictor and enhanced_data:
+        # Get all roast data for live prediction with lookahead
+        all_roast_data = db_manager.get_roast_data(roast_id)
+        if all_roast_data:
+            all_enhanced_data = add_computed_metrics(all_roast_data)
+            
+            # Use predictor for live detection (allows lookahead and updates)
+            fc_result = first_crack_predictor.predict_first_crack(all_enhanced_data)
             
             if fc_result:
-                # First crack detected! Save to database
-                success = db_manager.add_first_crack_event(
-                    roast_id=roast_id,
-                    timestamp=fc_result['timestamp'],
-                    detection_method=fc_result['detection_method'],
-                    confidence_score=fc_result['confidence_score'],
-                    signal_scores=fc_result['signal_scores'],
-                    current_temperature=fc_result['current_temperature']
-                )
+                # Check if this is a new/updated prediction
+                existing_fc = db_manager.get_first_crack_event(roast_id)
                 
-                if success:
-                    first_crack_detected = fc_result
-                    logger.info(f"🔥 FIRST CRACK DETECTED for roast {roast_id} at {fc_result['timestamp']} "
-                              f"(confidence: {fc_result['confidence_score']:.2f})")
+                # Store as historical prediction (same as post-roast analysis)
+                # This ensures live predictions exactly match historical ones
+                existing_prediction = db_manager.get_first_crack_prediction(roast_id)
+                
+                if not existing_prediction or existing_prediction['confidence_score'] < fc_result['confidence_score']:
+                    success = db_manager.add_first_crack_prediction(
+                        roast_id=roast_id,
+                        timestamp=fc_result['timestamp'],
+                        confidence_score=fc_result['confidence_score'],
+                        signal_scores=fc_result['signal_scores'],
+                        predicted_temperature=fc_result['current_temperature']
+                    )
                     
-                    # Emit real-time notification
-                    socketio.emit('first_crack_detected', {
-                        'roast_id': roast_id,
-                        'timestamp': fc_result['timestamp'],
-                        'confidence_score': fc_result['confidence_score'],
-                        'current_temperature': fc_result['current_temperature']
-                    })
+                    if success:
+                        first_crack_detected = fc_result
+                        action = "UPDATED" if existing_prediction else "PREDICTED"
+                        logger.info(f"🔮 FIRST CRACK {action} for roast {roast_id} at {fc_result['timestamp']} "
+                                  f"(confidence: {fc_result['confidence_score']:.2f})")
+                        
+                        # Emit real-time notification for live prediction updates
+                        socketio.emit('first_crack_predicted', {
+                            'roast_id': roast_id,
+                            'timestamp': fc_result['timestamp'],
+                            'confidence_score': fc_result['confidence_score'],
+                            'current_temperature': fc_result['current_temperature'],
+                            'detection_method': 'predicted'
+                        })
     
     # Get temperature alert threshold from config
     config = load_config()
@@ -357,8 +359,31 @@ def get_live_data(roast_id):
             latest_temp = latest_data['value']
             temp_alert = latest_temp >= max_temp_alert
     
-    # Get first crack info
-    first_crack_event = db_manager.get_first_crack_event(roast_id)
+    # Get first crack info (both manual and predicted)
+    first_crack_summary = db_manager.get_first_crack_summary(roast_id)
+    
+    # Generate FC prediction if active roast and no prediction exists yet
+    if is_active and not first_crack_summary['predicted'] and first_crack_predictor:
+        # Get all roast data for prediction analysis
+        all_roast_data = db_manager.get_roast_data(roast_id)
+        if all_roast_data:
+            enhanced_all_data = add_computed_metrics(all_roast_data)
+            prediction_result = first_crack_predictor.predict_first_crack(enhanced_all_data)
+            
+            if prediction_result:
+                # Store prediction in database
+                success = db_manager.add_first_crack_prediction(
+                    roast_id=roast_id,
+                    timestamp=prediction_result['timestamp'],
+                    confidence_score=prediction_result['confidence_score'],
+                    signal_scores=prediction_result['signal_scores'],
+                    predicted_temperature=prediction_result['current_temperature']
+                )
+                
+                if success:
+                    # Update the summary to include the new prediction
+                    first_crack_summary['predicted'] = db_manager.get_first_crack_prediction(roast_id)
+                    logger.info(f"🔮 FC prediction generated for active roast {roast_id}: {prediction_result['timestamp']} (confidence: {prediction_result['confidence_score']:.2f})")
     
     return jsonify({
         'data': enhanced_data,
@@ -367,7 +392,8 @@ def get_live_data(roast_id):
         'latest_temperature': latest_temp,
         'max_temp_threshold': max_temp_alert,
         'first_crack_detected': first_crack_detected,
-        'first_crack_event': first_crack_event,
+        'first_crack_event': first_crack_summary['manual'],
+        'first_crack_prediction': first_crack_summary['predicted'],
         'timestamp': datetime.now().isoformat()
     })
 
@@ -449,6 +475,89 @@ def delete_first_crack(roast_id):
         logger.error(f"Failed to delete first crack: {e}")
         return jsonify({'error': 'Failed to delete first crack'}), 500
 
+@app.route('/api/roasts/<roast_id>/first-crack-prediction', methods=['GET'])
+def get_first_crack_prediction(roast_id):
+    """API endpoint to get first crack prediction for a roast"""
+    prediction = db_manager.get_first_crack_prediction(roast_id)
+    if prediction:
+        return jsonify(prediction)
+    else:
+        return jsonify({'error': 'No first crack prediction found'}), 404
+
+@app.route('/api/roasts/<roast_id>/first-crack-prediction', methods=['POST'])
+def generate_first_crack_prediction(roast_id):
+    """API endpoint to generate first crack prediction for a roast"""
+    try:
+        # Verify the roast exists
+        roast_session = db_manager.get_roast_session(roast_id)
+        if not roast_session:
+            return jsonify({'error': f'Roast session {roast_id} not found'}), 404
+        
+        # Get all roast data for analysis
+        roast_data = db_manager.get_roast_data(roast_id)
+        if not roast_data:
+            return jsonify({'error': 'No roast data available for prediction'}), 400
+        
+        # Add computed metrics to the data for analysis
+        enhanced_data = add_computed_metrics(roast_data)
+        
+        logger.info(f"Generating FC prediction for roast {roast_id} with {len(enhanced_data)} data points")
+        
+        # Generate prediction
+        if first_crack_predictor:
+            prediction_result = first_crack_predictor.predict_first_crack(enhanced_data)
+            
+            if prediction_result:
+                # Store prediction in database
+                success = db_manager.add_first_crack_prediction(
+                    roast_id=roast_id,
+                    timestamp=prediction_result['timestamp'],
+                    confidence_score=prediction_result['confidence_score'],
+                    signal_scores=prediction_result['signal_scores'],
+                    predicted_temperature=prediction_result['current_temperature']
+                )
+                
+                if success:
+                    logger.info(f"FC prediction generated for roast {roast_id}: {prediction_result['timestamp']} (confidence: {prediction_result['confidence_score']:.2f})")
+                    return jsonify({
+                        'message': 'First crack prediction generated successfully',
+                        'prediction': prediction_result
+                    })
+                else:
+                    return jsonify({'error': 'Failed to save prediction to database'}), 500
+            else:
+                return jsonify({'error': 'No first crack could be predicted from the data'}), 404
+        else:
+            return jsonify({'error': 'First crack predictor not initialized'}), 500
+            
+    except Exception as e:
+        logger.error(f"Failed to generate FC prediction: {e}", exc_info=True)
+        return jsonify({'error': f'Failed to generate prediction: {str(e)}'}), 500
+
+@app.route('/api/roasts/<roast_id>/first-crack-prediction', methods=['DELETE'])
+def delete_first_crack_prediction(roast_id):
+    """API endpoint to delete first crack prediction"""
+    try:
+        success = db_manager.delete_first_crack_prediction(roast_id)
+        if success:
+            return jsonify({'message': 'First crack prediction deleted successfully'})
+        else:
+            return jsonify({'error': 'No first crack prediction found to delete'}), 404
+            
+    except Exception as e:
+        logger.error(f"Failed to delete FC prediction: {e}")
+        return jsonify({'error': 'Failed to delete first crack prediction'}), 500
+
+@app.route('/api/roasts/<roast_id>/first-crack-summary', methods=['GET'])
+def get_first_crack_summary(roast_id):
+    """API endpoint to get both manual FC event and prediction"""
+    try:
+        summary = db_manager.get_first_crack_summary(roast_id)
+        return jsonify(summary)
+    except Exception as e:
+        logger.error(f"Failed to get FC summary: {e}")
+        return jsonify({'error': 'Failed to get first crack summary'}), 500
+
 @app.route('/api/config', methods=['GET'])
 def get_config():
     """API endpoint to get UI configuration"""
@@ -495,7 +604,7 @@ def handle_disconnect():
 
 def run_app():
     """Initialize and run the Flask application"""
-    global db_manager, data_collector, first_crack_detector
+    global db_manager, data_collector, first_crack_predictor
     
     try:
         # Load configuration
@@ -515,10 +624,10 @@ def run_app():
         sample_rate = config['logging']['sample_rate']
         data_collector = DataCollector(sensors, db_manager, socketio, sample_rate)
         
-        # Initialize first crack detector
+        # Initialize first crack predictor (used for both live and historical analysis)
         fc_config = config.get('first_crack', {})
-        first_crack_detector = FirstCrackDetector(fc_config)
-        logger.info(f"FirstCrackDetector initialized with config: {fc_config}")
+        first_crack_predictor = FirstCrackPredictor(fc_config)
+        logger.info(f"FirstCrackPredictor initialized for unified live/historical analysis with config: {fc_config}")
         
         # Check for active roasts and close them (app restart should end active roasts)
         active_session = db_manager.get_active_roast_session()
