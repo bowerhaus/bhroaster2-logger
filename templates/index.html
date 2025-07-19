@@ -5,7 +5,7 @@
 {% block content %}
 <div class="px-2 sm:px-0">
     <!-- Header Section -->
-    <div class="glass-card rounded-xl p-6 mb-6 glow-amber">
+    <div class="glass-card rounded-xl p-6 mb-6 card-primary">
         <div class="flex justify-between items-center">
             <div>
                 <h2 class="text-2xl font-bold text-amber-300 mb-2">
@@ -17,16 +17,16 @@
             
             <div class="flex space-x-4">
                 {% if active_session %}
-                    <button id="stopRoastBtn" class="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white px-6 py-3 text-sm rounded-lg font-semibold transition-all duration-300 shadow-lg glow-red">
+                    <button id="stopRoastBtn" class="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white px-6 py-3 text-sm rounded-lg font-semibold transition-all duration-300 shadow-lg accent-danger">
                         <i class="fas fa-stop mr-2"></i>
                         Stop Current Roast
                     </button>
-                    <a href="/roast/{{ active_session.id }}" class="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 text-sm rounded-lg font-semibold transition-all duration-300 shadow-lg glow-blue">
+                    <a href="/roast/{{ active_session.id }}" class="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 text-sm rounded-lg font-semibold transition-all duration-300 shadow-lg accent-info">
                         <i class="fas fa-chart-line mr-2"></i>
                         View Live Data
                     </a>
                 {% else %}
-                    <button id="startRoastBtn" class="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-6 py-3 text-sm rounded-lg font-semibold transition-all duration-300 shadow-lg glow-green">
+                    <button id="startRoastBtn" class="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-6 py-3 text-sm rounded-lg font-semibold transition-all duration-300 shadow-lg accent-success">
                         <i class="fas fa-play mr-2"></i>
                         Start New Roast
                     </button>
@@ -37,7 +37,7 @@
 
     <!-- Active Roast Status -->
     {% if active_session %}
-    <div class="glass-card rounded-xl p-6 mb-6 border-l-4 border-red-500 glow-red">
+    <div class="glass-card rounded-xl p-6 mb-6 border-l-4 border-red-500 accent-danger">
         <div class="flex justify-between items-center mb-4">
             <div class="flex items-center">
                 <i class="fas fa-fire text-red-400 animate-pulse mr-3 text-xl"></i>
@@ -95,7 +95,7 @@
     {% endif %}
 
     <!-- Roast Sessions Table -->
-    <div class="glass-card rounded-xl overflow-hidden glow-amber">
+    <div class="glass-card rounded-xl overflow-hidden card-primary">
         <div class="px-6 py-4 border-b border-gray-600">
             <div class="flex items-center justify-between">
                 <h3 class="text-xl font-bold text-amber-300">
@@ -200,7 +200,7 @@
             <i class="fas fa-coffee text-gray-500 text-6xl mb-4"></i>
             <h3 class="text-lg font-medium text-gray-300 mb-2">No roast sessions yet</h3>
             <p class="text-gray-400 mb-4">Start your first roast to begin collecting data</p>
-            <button id="startFirstRoastBtn" class="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-300 shadow-lg glow-green">
+            <button id="startFirstRoastBtn" class="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-300 shadow-lg accent-success">
                 <i class="fas fa-play mr-2"></i>
                 Start Your First Roast
             </button>
@@ -211,7 +211,7 @@
 
 <!-- Roaster Selection Dialog -->
 <div id="roasterModal" class="fixed inset-0 bg-black bg-opacity-75 hidden items-center justify-center z-50">
-    <div class="glass-card rounded-xl p-6 max-w-sm mx-4 shadow-xl glow-green">
+    <div class="glass-card rounded-xl p-6 max-w-sm mx-4 shadow-xl accent-success">
         <div class="text-center">
             <div class="text-green-400 mb-4">
                 <i class="fas fa-fire text-3xl"></i>
@@ -236,7 +236,7 @@
 
 <!-- Dark Modern Delete Confirmation Dialog -->
 <div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-75 hidden items-center justify-center z-50">
-    <div class="glass-card rounded-xl p-6 max-w-sm mx-4 shadow-xl glow-red">
+    <div class="glass-card rounded-xl p-6 max-w-sm mx-4 shadow-xl accent-danger">
         <div class="text-center">
             <div class="text-red-400 mb-4">
                 <i class="fas fa-trash text-3xl"></i>

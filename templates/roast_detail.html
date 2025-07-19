@@ -5,7 +5,7 @@
 {% block content %}
 <div class="px-2 sm:px-0">
     <!-- Header Section -->
-    <div class="{% if roast_session.status == 'active' %}glass-card glow-red border-l-4 border-red-500{% else %}glass-card glow-amber{% endif %} rounded-xl p-6 mb-6">
+    <div class="{% if roast_session.status == 'active' %}glass-card accent-danger border-l-4 border-red-500{% else %}glass-card card-primary{% endif %} rounded-xl p-6 mb-6">
         <div class="flex justify-between items-center mb-3">
             <div class="flex items-center">
                 {% if roast_session.status == 'active' %}
@@ -19,12 +19,12 @@
             
             <div class="flex items-center space-x-3">
                 {% if roast_session.status == 'active' %}
-                    <button id="stopRoastBtn" class="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white px-6 py-3 text-sm rounded-lg font-semibold transition-all duration-300 shadow-lg glow-red">
+                    <button id="stopRoastBtn" class="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white px-6 py-3 text-sm rounded-lg font-semibold transition-all duration-300 shadow-lg accent-danger">
                         <i class="fas fa-stop mr-2"></i>
                         Stop Roast
                     </button>
                 {% endif %}
-                <a href="/" class="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 text-sm rounded-lg font-semibold transition-all duration-300 shadow-lg glow-blue">
+                <a href="/" class="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 text-sm rounded-lg font-semibold transition-all duration-300 shadow-lg accent-info">
                     <i class="fas fa-arrow-left mr-2"></i>
                     Back
                 </a>
@@ -128,7 +128,7 @@
     </div>
 
     <!-- Chart -->
-    <div class="glass-card rounded-xl p-6 glow-amber">
+    <div class="glass-card rounded-xl p-6 card-primary">
         <div class="flex justify-between items-center mb-6">
             <h3 class="text-xl font-bold text-amber-300">
                 <i class="fas fa-chart-line mr-2"></i>
@@ -165,7 +165,7 @@
                     <span class="text-sm text-red-300">First Crack (FC)</span>
                 </div>
                 {% if roast_session.status == 'active' %}
-                <button id="markFirstCrackBtn" class="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white px-4 py-2 text-xs rounded-lg font-semibold transition-all duration-300 shadow-lg glow-red">
+                <button id="markFirstCrackBtn" class="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white px-4 py-2 text-xs rounded-lg font-semibold transition-all duration-300 shadow-lg accent-danger">
                     <i class="fas fa-fire mr-1"></i>
                     <span id="markFCText">Mark FC</span>
                 </button>
@@ -179,7 +179,7 @@
     </div>
 
     <!-- Notes Section -->
-    <div class="glass-card rounded-xl p-6 mt-6 glow-amber">
+    <div class="glass-card rounded-xl p-6 mt-6 card-primary">
         <div class="mb-4">
             <h3 class="text-xl font-bold text-amber-300 flex items-center">
                 <i class="fas fa-sticky-note mr-2"></i>
@@ -508,6 +508,16 @@ const chart = new Chart(ctx, {
         plugins: {
             legend: {
                 display: false
+            },
+            tooltip: {
+                callbacks: {
+                    title: function(context) {
+                        const value = context[0].parsed.x;
+                        const minutes = Math.floor(value);
+                        const seconds = Math.floor((value % 1) * 60);
+                        return `Time: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    }
+                }
             }
         }
     }
