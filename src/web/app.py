@@ -245,6 +245,15 @@ def get_live_data(roast_id):
         'timestamp': datetime.now().isoformat()
     })
 
+@app.route('/api/config', methods=['GET'])
+def get_config():
+    """API endpoint to get UI configuration"""
+    config = load_config()
+    return jsonify({
+        'ui': config.get('ui', {}),
+        'alerts': config.get('alerts', {})
+    })
+
 @app.route('/api/roasts/<roast_id>', methods=['DELETE'])
 def delete_roast(roast_id):
     """API endpoint to delete a roast session"""

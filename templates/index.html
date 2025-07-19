@@ -438,7 +438,19 @@ if (activeRoastId) {
 let pollingInterval;
 if (activeRoastId) {
     console.log('Starting live data polling for roast:', activeRoastId);
-    pollingInterval = setInterval(pollForLiveData, 1000); // Poll every 1 second
+    
+    // Fetch UI configuration for refresh rate
+    fetch('/api/config')
+        .then(response => response.json())
+        .then(config => {
+            const refreshRate = config.ui?.CHART_REFRESH_RATE_MS || 2000;
+            console.log('Using chart refresh rate:', refreshRate, 'ms');
+            pollingInterval = setInterval(pollForLiveData, refreshRate);
+        })
+        .catch(error => {
+            console.error('Error fetching config, using default refresh rate:', error);
+            pollingInterval = setInterval(pollForLiveData, 2000); // Default fallback
+        });
 }
 
 // Socket.IO event handlers

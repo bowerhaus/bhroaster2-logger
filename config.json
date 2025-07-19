@@ -28,5 +28,8 @@
   },
   "alerts": {
     "MAX_TEMPERATURE_ALERT": 125
+  },
+  "ui": {
+    "CHART_REFRESH_RATE_MS": 1000
   }
 }
