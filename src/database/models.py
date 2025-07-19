@@ -37,18 +37,22 @@ class DatabaseManager:
                         name TEXT NOT NULL,
                         status TEXT NOT NULL DEFAULT 'active',
                         roaster_id TEXT NOT NULL DEFAULT 'BHR2',
+                        notes TEXT,
                         first_crack_time TEXT,
                         first_crack_detected_by TEXT,
                         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
                 
-                # Add roaster_id column to existing tables (migration)
+                # Add missing columns to existing tables (migration)
                 cursor.execute("PRAGMA table_info(roast_sessions)")
                 columns = [column[1] for column in cursor.fetchall()]
                 if 'roaster_id' not in columns:
                     cursor.execute('ALTER TABLE roast_sessions ADD COLUMN roaster_id TEXT NOT NULL DEFAULT "BHR2"')
                     logger.info("Added roaster_id column to roast_sessions table")
+                if 'notes' not in columns:
+                    cursor.execute('ALTER TABLE roast_sessions ADD COLUMN notes TEXT')
+                    logger.info("Added notes column to roast_sessions table")
                 
                 # Create data_points table
                 cursor.execute('''
@@ -409,6 +413,41 @@ class DatabaseManager:
                     
         except Exception as e:
             logger.error(f"Failed to update roaster_id: {e}")
+            return False
+
+    def update_roast_notes(self, roast_id: str, notes: str) -> bool:
+        """Update the notes for an existing roast session"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Check if roast exists
+                cursor.execute('''
+                    SELECT id FROM roast_sessions WHERE id = ?
+                ''', (roast_id,))
+                
+                result = cursor.fetchone()
+                if not result:
+                    logger.warning(f"No roast session found: {roast_id}")
+                    return False
+                
+                # Update notes
+                cursor.execute('''
+                    UPDATE roast_sessions 
+                    SET notes = ?
+                    WHERE id = ?
+                ''', (notes, roast_id))
+                
+                if cursor.rowcount > 0:
+                    conn.commit()
+                    logger.info(f"Updated notes for roast {roast_id}")
+                    return True
+                else:
+                    logger.warning(f"No roast session updated: {roast_id}")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Failed to update notes: {e}")
             return False
 
     def delete_roast_session(self, roast_id: str) -> bool:

@@ -594,6 +594,26 @@ def update_roast_roaster(roast_id):
         logger.error(f"Failed to update roaster ID: {e}")
         return jsonify({'error': 'Failed to update roaster ID'}), 500
 
+@app.route('/api/roasts/<roast_id>/notes', methods=['PUT'])
+def update_roast_notes(roast_id):
+    """API endpoint to update notes for a roast session"""
+    try:
+        data = request.get_json()
+        if not data or 'notes' not in data:
+            return jsonify({'error': 'notes field is required'}), 400
+        
+        notes = data['notes']
+        success = db_manager.update_roast_notes(roast_id, notes)
+        
+        if success:
+            return jsonify({'message': 'Notes updated successfully'})
+        else:
+            return jsonify({'error': 'Failed to update notes (roast not found)'}), 400
+            
+    except Exception as e:
+        logger.error(f"Failed to update notes: {e}")
+        return jsonify({'error': 'Failed to update notes'}), 500
+
 @app.route('/api/roasts/<roast_id>', methods=['DELETE'])
 def delete_roast(roast_id):
     """API endpoint to delete a roast session"""

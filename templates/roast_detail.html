@@ -173,8 +173,101 @@
             </div>
         </div>
         
-        <div class="relative" style="height: 400px;">
+        <div class="relative" style="height: 480px;">
             <canvas id="roastChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Notes Section -->
+    <div class="glass-card rounded-xl p-6 mt-6 glow-amber">
+        <div class="mb-4">
+            <h3 class="text-xl font-bold text-amber-300 flex items-center">
+                <i class="fas fa-sticky-note mr-2"></i>
+                Roast Notes
+                <button id="editNotesBtn" class="ml-2 text-blue-400 hover:text-blue-300 transition-colors duration-200" title="Edit Notes">
+                    <i class="fas fa-pencil-alt text-lg"></i>
+                </button>
+            </h3>
+        </div>
+        
+        <!-- Notes Display -->
+        <div id="notesDisplay" class="min-h-[100px]">
+            <div id="notesContent" class="prose prose-invert max-w-none">
+                {% if roast_session.notes %}
+                    {{ roast_session.notes }}
+                {% else %}
+                    <p class="text-gray-400 italic">No notes added yet. Click "Edit Notes" to add your observations, tasting notes, or process improvements.</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Notes Editor (Hidden by default) -->
+        <div id="notesEditor" class="hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                <!-- Markdown Editor -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">
+                        <i class="fas fa-edit mr-1"></i>
+                        Edit Notes (Markdown supported)
+                    </label>
+                    <textarea id="notesTextarea" 
+                              class="w-full h-64 bg-gray-800 text-white border border-gray-600 rounded-lg p-3 font-mono text-sm resize-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                              placeholder="# Roast Notes&#10;&#10;## Process&#10;- Initial observations...&#10;&#10;## Tasting Notes&#10;- Aroma: ...&#10;- Flavor: ...&#10;&#10;## Improvements&#10;- Next time try..."></textarea>
+                    <div class="flex justify-between items-center mt-2">
+                        <div class="text-xs text-gray-400">
+                            <i class="fab fa-markdown mr-1"></i>
+                            Markdown formatting supported
+                        </div>
+                        <div class="text-xs text-gray-400">
+                            <span id="charCount">0</span> / 5000 characters
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Live Preview -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">
+                        <i class="fas fa-eye mr-1"></i>
+                        Live Preview
+                    </label>
+                    <div id="notesPreview" 
+                         class="h-64 bg-gray-900 border border-gray-600 rounded-lg p-3 overflow-y-auto prose prose-invert prose-sm max-w-none">
+                        <p class="text-gray-400 italic">Preview will appear here as you type...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Editor Controls -->
+            <div class="flex justify-between items-center">
+                <div class="flex space-x-2">
+                    <button id="formatBold" class="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-sm" title="Bold">
+                        <i class="fas fa-bold"></i>
+                    </button>
+                    <button id="formatItalic" class="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-sm" title="Italic">
+                        <i class="fas fa-italic"></i>
+                    </button>
+                    <button id="formatHeader" class="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-sm" title="Header">
+                        <i class="fas fa-heading"></i>
+                    </button>
+                    <button id="formatList" class="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-sm" title="List">
+                        <i class="fas fa-list-ul"></i>
+                    </button>
+                    <button id="formatCode" class="px-2 py-1 bg-gray-700 text-white rounded hover:bg-gray-600 text-sm" title="Code">
+                        <i class="fas fa-code"></i>
+                    </button>
+                </div>
+                
+                <div class="flex space-x-3">
+                    <button id="cancelNotesBtn" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 text-sm rounded-lg font-semibold transition-all duration-300">
+                        <i class="fas fa-times mr-2"></i>
+                        Cancel
+                    </button>
+                    <button id="saveNotesBtn" class="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-4 py-2 text-sm rounded-lg font-semibold transition-all duration-300 shadow-lg">
+                        <i class="fas fa-save mr-2"></i>
+                        Save Notes
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1137,6 +1230,291 @@ if (cancelRoasterBtn) {
 
 // Load roaster options on page load
 loadRoasterOptions();
+
+// Notes functionality
+const editNotesBtn = document.getElementById('editNotesBtn');
+const notesDisplay = document.getElementById('notesDisplay');
+const notesEditor = document.getElementById('notesEditor');
+const notesContent = document.getElementById('notesContent');
+const notesTextarea = document.getElementById('notesTextarea');
+const notesPreview = document.getElementById('notesPreview');
+const saveNotesBtn = document.getElementById('saveNotesBtn');
+const cancelNotesBtn = document.getElementById('cancelNotesBtn');
+const charCount = document.getElementById('charCount');
+
+// Formatting buttons
+const formatBold = document.getElementById('formatBold');
+const formatItalic = document.getElementById('formatItalic');
+const formatHeader = document.getElementById('formatHeader');
+const formatList = document.getElementById('formatList');
+const formatCode = document.getElementById('formatCode');
+
+let originalNotes = '';
+let isEditingNotes = false;
+
+// Initialize notes content with current notes
+function initializeNotes() {
+    const currentNotes = '{{ roast_session.notes | default("") | replace("\\", "\\\\") | replace("\"", "\\\"") | replace("\n", "\\n") | replace("\r", "") }}';
+    originalNotes = currentNotes;
+    
+    if (currentNotes) {
+        renderMarkdown(currentNotes, notesContent);
+    }
+}
+
+// Render Markdown to HTML
+function renderMarkdown(markdown, targetElement) {
+    if (typeof marked !== 'undefined') {
+        // Configure marked for security
+        marked.setOptions({
+            breaks: true,
+            gfm: true,
+            sanitize: false, // We trust our own content
+            smartLists: true,
+            smartypants: false
+        });
+        
+        const html = marked.parse(markdown);
+        targetElement.innerHTML = html;
+    } else {
+        // Fallback to plain text with basic formatting
+        targetElement.innerHTML = markdown.replace(/\n/g, '<br>');
+    }
+}
+
+// Update character count
+function updateCharCount() {
+    const count = notesTextarea.value.length;
+    charCount.textContent = count;
+    
+    if (count > 5000) {
+        charCount.className = 'text-red-400 font-bold';
+        saveNotesBtn.disabled = true;
+        saveNotesBtn.classList.add('opacity-50', 'cursor-not-allowed');
+    } else if (count > 4500) {
+        charCount.className = 'text-yellow-400 font-bold';
+        saveNotesBtn.disabled = false;
+        saveNotesBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    } else {
+        charCount.className = 'text-gray-400';
+        saveNotesBtn.disabled = false;
+        saveNotesBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+}
+
+// Update live preview
+function updatePreview() {
+    const markdown = notesTextarea.value;
+    if (markdown.trim()) {
+        renderMarkdown(markdown, notesPreview);
+    } else {
+        notesPreview.innerHTML = '<p class="text-gray-400 italic">Preview will appear here as you type...</p>';
+    }
+}
+
+// Enter edit mode
+function enterNotesEditMode() {
+    isEditingNotes = true;
+    notesTextarea.value = originalNotes;
+    updateCharCount();
+    updatePreview();
+    
+    notesDisplay.classList.add('hidden');
+    notesEditor.classList.remove('hidden');
+    
+    editNotesBtn.disabled = true;
+    editNotesBtn.classList.add('opacity-50', 'cursor-not-allowed');
+    editNotesBtn.title = 'Editing...';
+    
+    // Focus textarea
+    notesTextarea.focus();
+}
+
+// Exit edit mode
+function exitNotesEditMode() {
+    isEditingNotes = false;
+    
+    notesDisplay.classList.remove('hidden');
+    notesEditor.classList.add('hidden');
+    
+    editNotesBtn.disabled = false;
+    editNotesBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    editNotesBtn.title = 'Edit Notes';
+}
+
+// Check for unsaved changes
+function hasUnsavedChanges() {
+    return notesTextarea.value !== originalNotes;
+}
+
+// Insert markdown formatting
+function insertFormatting(before, after = '', placeholder = 'text') {
+    const start = notesTextarea.selectionStart;
+    const end = notesTextarea.selectionEnd;
+    const selectedText = notesTextarea.value.substring(start, end) || placeholder;
+    const replacement = before + selectedText + after;
+    
+    notesTextarea.value = notesTextarea.value.substring(0, start) + replacement + notesTextarea.value.substring(end);
+    
+    // Set cursor position
+    const newCursorPos = start + before.length + selectedText.length + after.length;
+    notesTextarea.setSelectionRange(newCursorPos, newCursorPos);
+    notesTextarea.focus();
+    
+    updateCharCount();
+    updatePreview();
+}
+
+// Save notes
+async function saveNotes() {
+    const notes = notesTextarea.value;
+    
+    try {
+        const response = await fetch(`/api/roasts/${roastId}/notes`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                notes: notes
+            })
+        });
+        
+        if (response.ok) {
+            originalNotes = notes;
+            renderMarkdown(notes, notesContent);
+            exitNotesEditMode();
+            
+            // Success notification
+            Swal.fire({
+                icon: 'success',
+                title: 'Notes Saved!',
+                text: 'Your roast notes have been saved successfully.',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000,
+                timerProgressBar: true,
+                background: '#1f2937',
+                color: '#f3f4f6'
+            });
+        } else {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to save notes');
+        }
+    } catch (error) {
+        console.error('Error saving notes:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Save Failed',
+            text: 'Failed to save notes: ' + error.message,
+            background: '#1f2937',
+            color: '#f3f4f6'
+        });
+    }
+}
+
+// Cancel editing with confirmation if there are unsaved changes
+function cancelNotesEditing() {
+    if (hasUnsavedChanges()) {
+        Swal.fire({
+            title: 'Discard Changes?',
+            text: 'You have unsaved changes. Are you sure you want to discard them?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Discard',
+            cancelButtonText: 'Keep Editing',
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#6b7280',
+            background: '#1f2937',
+            color: '#f3f4f6'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                exitNotesEditMode();
+            }
+        });
+    } else {
+        exitNotesEditMode();
+    }
+}
+
+// Event listeners
+if (editNotesBtn) {
+    editNotesBtn.addEventListener('click', enterNotesEditMode);
+}
+
+if (saveNotesBtn) {
+    saveNotesBtn.addEventListener('click', saveNotes);
+}
+
+if (cancelNotesBtn) {
+    cancelNotesBtn.addEventListener('click', cancelNotesEditing);
+}
+
+if (notesTextarea) {
+    notesTextarea.addEventListener('input', () => {
+        updateCharCount();
+        updatePreview();
+    });
+    
+    // Keyboard shortcuts
+    notesTextarea.addEventListener('keydown', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+            switch (e.key) {
+                case 's':
+                    e.preventDefault();
+                    saveNotes();
+                    break;
+                case 'b':
+                    e.preventDefault();
+                    insertFormatting('**', '**', 'bold text');
+                    break;
+                case 'i':
+                    e.preventDefault();
+                    insertFormatting('*', '*', 'italic text');
+                    break;
+            }
+        }
+        
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelNotesEditing();
+        }
+    });
+}
+
+// Formatting button event listeners
+if (formatBold) {
+    formatBold.addEventListener('click', () => insertFormatting('**', '**', 'bold text'));
+}
+
+if (formatItalic) {
+    formatItalic.addEventListener('click', () => insertFormatting('*', '*', 'italic text'));
+}
+
+if (formatHeader) {
+    formatHeader.addEventListener('click', () => insertFormatting('## ', '', 'Header'));
+}
+
+if (formatList) {
+    formatList.addEventListener('click', () => insertFormatting('- ', '', 'List item'));
+}
+
+if (formatCode) {
+    formatCode.addEventListener('click', () => insertFormatting('`', '`', 'code'));
+}
+
+// Prevent page unload with unsaved changes
+window.addEventListener('beforeunload', (e) => {
+    if (isEditingNotes && hasUnsavedChanges()) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes to your notes. Are you sure you want to leave?';
+        return e.returnValue;
+    }
+});
+
+// Initialize notes on page load
+initializeNotes();
 
 </script>
 {% endblock %}
