@@ -50,5 +50,8 @@
     "BHR2",
     "BHR2-F",
     "Test"
-  ]
+  ],
+  "session": {
+    "max_roast_time_minutes": 16
+  }
 }

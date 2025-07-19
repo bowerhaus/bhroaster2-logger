@@ -770,3 +770,107 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Failed to get FC summary: {e}")
             return {'manual': None, 'predicted': None}
+    
+    def truncate_roasts_to_max_time(self, max_time_minutes: int = 16) -> Dict:
+        """One-time operation to truncate existing roasts to maximum time limit"""
+        try:
+            from datetime import datetime, timedelta
+            
+            results = {
+                'processed': 0,
+                'truncated': 0,
+                'errors': 0,
+                'details': []
+            }
+            
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                # Get all roast sessions
+                cursor.execute('''
+                    SELECT id, start_time, end_time, name, status
+                    FROM roast_sessions
+                    ORDER BY start_time
+                ''')
+                
+                sessions = cursor.fetchall()
+                
+                for session in sessions:
+                    results['processed'] += 1
+                    
+                    try:
+                        roast_id = session['id']
+                        start_time = datetime.fromisoformat(session['start_time'])
+                        max_end_time = start_time + timedelta(minutes=max_time_minutes)
+                        
+                        # Count data points before truncation
+                        cursor.execute('''
+                            SELECT COUNT(*) FROM data_points WHERE roast_id = ?
+                        ''', (roast_id,))
+                        total_points = cursor.fetchone()[0]
+                        
+                        # Delete data points beyond max time
+                        cursor.execute('''
+                            DELETE FROM data_points 
+                            WHERE roast_id = ? AND timestamp > ?
+                        ''', (roast_id, max_end_time.isoformat()))
+                        
+                        deleted_points = cursor.rowcount
+                        
+                        # Count remaining data points
+                        cursor.execute('''
+                            SELECT COUNT(*) FROM data_points WHERE roast_id = ?
+                        ''', (roast_id,))
+                        remaining_points = cursor.fetchone()[0]
+                        
+                        # Update end_time if session was longer than max time
+                        original_end_time = session['end_time']
+                        if original_end_time:
+                            original_end = datetime.fromisoformat(original_end_time)
+                            if original_end > max_end_time:
+                                cursor.execute('''
+                                    UPDATE roast_sessions 
+                                    SET end_time = ?
+                                    WHERE id = ?
+                                ''', (max_end_time.isoformat(), roast_id))
+                        
+                        if deleted_points > 0:
+                            results['truncated'] += 1
+                            results['details'].append({
+                                'roast_id': roast_id,
+                                'name': session['name'],
+                                'start_time': session['start_time'],
+                                'original_end_time': original_end_time,
+                                'new_end_time': max_end_time.isoformat(),
+                                'total_points': total_points,
+                                'deleted_points': deleted_points,
+                                'remaining_points': remaining_points
+                            })
+                            
+                            logger.info(f"Truncated roast {roast_id} ({session['name']}): "
+                                      f"removed {deleted_points} data points, {remaining_points} remaining")
+                    
+                    except Exception as e:
+                        results['errors'] += 1
+                        logger.error(f"Error processing roast {session['id']}: {e}")
+                        results['details'].append({
+                            'roast_id': session['id'],
+                            'error': str(e)
+                        })
+                
+                conn.commit()
+                
+            logger.info(f"Roast truncation completed: {results['processed']} processed, "
+                       f"{results['truncated']} truncated, {results['errors']} errors")
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Failed to truncate roasts: {e}")
+            return {
+                'processed': 0,
+                'truncated': 0,
+                'errors': 1,
+                'details': [{'error': str(e)}]
+            }

@@ -672,7 +672,7 @@ def run_app():
         
         # Initialize data collector
         sample_rate = config['logging']['sample_rate']
-        data_collector = DataCollector(sensors, db_manager, socketio, sample_rate)
+        data_collector = DataCollector(sensors, db_manager, socketio, sample_rate, config)
         
         # Initialize first crack predictor (used for both live and historical analysis)
         fc_config = config.get('first_crack', {})
