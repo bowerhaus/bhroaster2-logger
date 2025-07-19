@@ -103,11 +103,22 @@
                     Recent Roast Sessions
                 </h3>
                 <div class="flex items-center space-x-4">
-                    <div class="flex items-center">
-                        <label for="roasterFilter" class="text-sm text-gray-400 mr-2">Filter by Roaster:</label>
-                        <select id="roasterFilter" class="bg-gray-700 text-white px-3 py-1 rounded border border-gray-600 text-sm">
-                            <option value="">All Roasters</option>
-                        </select>
+                    <div class="flex items-center space-x-4">
+                        <div class="flex items-center">
+                            <label for="roasterFilter" class="text-sm text-gray-400 mr-2">Filter by Roaster:</label>
+                            <select id="roasterFilter" class="bg-gray-700 text-white px-3 py-1 rounded border border-gray-600 text-sm">
+                                <option value="">All Roasters</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center">
+                            <label for="itemsPerPage" class="text-sm text-gray-400 mr-2">Items per page:</label>
+                            <select id="itemsPerPage" class="bg-gray-700 text-white px-3 py-1 rounded border border-gray-600 text-sm">
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                                <option value="all">All</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="text-sm text-gray-400">
                         <i class="fas fa-database mr-1"></i>
@@ -122,19 +133,62 @@
             <table class="w-full">
                 <thead>
                     <tr class="border-b border-gray-600">
-                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Name</th>
-                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Roaster</th>
-                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Start Time</th>
-                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Duration</th>
-                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Peak Temp</th>
-                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Status</th>
-                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Data Points</th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300 cursor-pointer hover:bg-gray-700/30 transition-colors" data-sort="name">
+                            <div class="flex items-center justify-between">
+                                <span>Name</span>
+                                <i class="fas fa-sort text-gray-500 ml-2"></i>
+                            </div>
+                        </th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300 cursor-pointer hover:bg-gray-700/30 transition-colors" data-sort="roaster">
+                            <div class="flex items-center justify-between">
+                                <span>Roaster</span>
+                                <i class="fas fa-sort text-gray-500 ml-2"></i>
+                            </div>
+                        </th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300 cursor-pointer hover:bg-gray-700/30 transition-colors" data-sort="start_time">
+                            <div class="flex items-center justify-between">
+                                <span>Start Time</span>
+                                <i class="fas fa-sort text-gray-500 ml-2"></i>
+                            </div>
+                        </th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300 cursor-pointer hover:bg-gray-700/30 transition-colors" data-sort="duration">
+                            <div class="flex items-center justify-between">
+                                <span>Duration</span>
+                                <i class="fas fa-sort text-gray-500 ml-2"></i>
+                            </div>
+                        </th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300 cursor-pointer hover:bg-gray-700/30 transition-colors" data-sort="peak_temp">
+                            <div class="flex items-center justify-between">
+                                <span>Peak Temp</span>
+                                <i class="fas fa-sort text-gray-500 ml-2"></i>
+                            </div>
+                        </th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300 cursor-pointer hover:bg-gray-700/30 transition-colors" data-sort="status">
+                            <div class="flex items-center justify-between">
+                                <span>Status</span>
+                                <i class="fas fa-sort text-gray-500 ml-2"></i>
+                            </div>
+                        </th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300 cursor-pointer hover:bg-gray-700/30 transition-colors" data-sort="data_points">
+                            <div class="flex items-center justify-between">
+                                <span>Data Points</span>
+                                <i class="fas fa-sort text-gray-500 ml-2"></i>
+                            </div>
+                        </th>
                         <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for session in roast_sessions %}
-                    <tr class="border-b border-gray-700 hover:bg-gray-800/50 transition-colors duration-200{% if session.status == 'active' %} bg-red-900/20 border-red-500/30{% endif %}" data-roast-id="{{ session.id }}" data-roaster-id="{{ session.roaster_id or 'BHR2' }}">
+                    <tr class="session-row border-b border-gray-700 hover:bg-gray-800/50 transition-colors duration-200{% if session.status == 'active' %} bg-red-900/20 border-red-500/30{% endif %}" 
+                        data-roast-id="{{ session.id }}" 
+                        data-roaster-id="{{ session.roaster_id or 'BHR2' }}"
+                        data-name="{{ session.name }}"
+                        data-start-time="{{ session.start_time }}"
+                        data-duration="{{ session.duration_minutes or 0 }}"
+                        data-peak-temp="{{ session.peak_temp or 0 }}"
+                        data-status="{{ session.status }}"
+                        data-data-points="{{ session.data_count or 0 }}">
                         <td class="px-4 py-3">
                             <div class="text-sm font-medium text-white">{{ session.name }}</div>
                         </td>
@@ -194,6 +248,26 @@
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+        
+        <!-- Pagination Controls -->
+        <div id="paginationControls" class="px-6 py-4 border-t border-gray-600 flex items-center justify-between">
+            <div class="text-sm text-gray-400">
+                Showing <span id="showingStart">0</span> to <span id="showingEnd">0</span> of <span id="totalItems">0</span> sessions
+            </div>
+            <div class="flex items-center space-x-2">
+                <button id="prevPage" class="px-3 py-1 text-sm bg-gray-700 text-gray-300 rounded border border-gray-600 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fas fa-chevron-left mr-1"></i>
+                    Previous
+                </button>
+                <div id="pageNumbers" class="flex items-center space-x-1">
+                    <!-- Page numbers will be inserted here -->
+                </div>
+                <button id="nextPage" class="px-3 py-1 text-sm bg-gray-700 text-gray-300 rounded border border-gray-600 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Next
+                    <i class="fas fa-chevron-right ml-1"></i>
+                </button>
+            </div>
         </div>
         {% else %}
         <div class="text-center py-12">
@@ -713,9 +787,292 @@ function filterSessionsByRoaster() {
 // Event listener for roaster filter
 roasterFilter.addEventListener('change', filterSessionsByRoaster);
 
+// Table sorting and pagination functionality
+let currentSort = { column: 'start_time', direction: 'desc' };
+let currentPage = 1;
+let itemsPerPage = 25;
+let allRows = [];
+let filteredRows = [];
+
+// Initialize table functionality
+function initializeTable() {
+    console.log('Initializing table...');
+    allRows = Array.from(document.querySelectorAll('.session-row'));
+    console.log('Found rows:', allRows.length);
+    filteredRows = [...allRows];
+    
+    if (allRows.length > 0) {
+        sortTable(currentSort.column, currentSort.direction);
+        updatePagination();
+    } else {
+        console.log('No rows found, skipping table initialization');
+    }
+}
+
+// Sort table by column
+function sortTable(column, direction = null) {
+    console.log('Sorting table by:', column, 'direction:', direction);
+    
+    if (filteredRows.length === 0) {
+        console.log('No rows to sort');
+        return;
+    }
+    
+    if (direction === null) {
+        direction = (currentSort.column === column && currentSort.direction === 'asc') ? 'desc' : 'asc';
+    }
+    
+    currentSort = { column, direction };
+    currentPage = 1;
+    
+    // Update sort icons
+    document.querySelectorAll('th[data-sort] i').forEach(icon => {
+        icon.className = 'fas fa-sort text-gray-500 ml-2';
+    });
+    
+    const sortIcon = document.querySelector(`th[data-sort="${column}"] i`);
+    if (sortIcon) {
+        sortIcon.className = direction === 'asc' 
+            ? 'fas fa-sort-up text-amber-400 ml-2'
+            : 'fas fa-sort-down text-amber-400 ml-2';
+    }
+    
+    // Sort filtered rows
+    filteredRows.sort((a, b) => {
+        let aValue, bValue;
+        
+        switch (column) {
+            case 'name':
+                aValue = (a.dataset.name || '').toLowerCase();
+                bValue = (b.dataset.name || '').toLowerCase();
+                break;
+            case 'roaster':
+                aValue = (a.getAttribute('data-roaster-id') || '').toLowerCase();
+                bValue = (b.getAttribute('data-roaster-id') || '').toLowerCase();
+                break;
+            case 'start_time':
+                aValue = new Date(a.getAttribute('data-start-time') || 0);
+                bValue = new Date(b.getAttribute('data-start-time') || 0);
+                break;
+            case 'duration':
+                aValue = parseInt(a.dataset.duration) || 0;
+                bValue = parseInt(b.dataset.duration) || 0;
+                break;
+            case 'peak_temp':
+                aValue = parseFloat(a.getAttribute('data-peak-temp')) || 0;
+                bValue = parseFloat(b.getAttribute('data-peak-temp')) || 0;
+                break;
+            case 'status':
+                aValue = a.dataset.status || '';
+                bValue = b.dataset.status || '';
+                break;
+            case 'data_points':
+                aValue = parseInt(a.getAttribute('data-data-points')) || 0;
+                bValue = parseInt(b.getAttribute('data-data-points')) || 0;
+                break;
+            default:
+                console.log('Unknown sort column:', column);
+                return 0;
+        }
+        
+        console.log('Comparing:', aValue, 'vs', bValue);
+        
+        if (aValue < bValue) return direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+    
+    console.log('Sorted rows:', filteredRows.length);
+    
+    // Re-order the rows in the DOM
+    const tbody = document.querySelector('tbody');
+    if (tbody) {
+        filteredRows.forEach(row => {
+            tbody.appendChild(row);
+        });
+    }
+    
+    updatePagination();
+}
+
+// Update pagination display
+function updatePagination() {
+    const totalItems = filteredRows.length;
+    const totalPages = itemsPerPage === 'all' ? 1 : Math.ceil(totalItems / itemsPerPage);
+    
+    // Hide all rows first
+    allRows.forEach(row => row.style.display = 'none');
+    
+    // Show rows for current page
+    if (itemsPerPage === 'all') {
+        filteredRows.forEach(row => row.style.display = '');
+    } else {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+        
+        for (let i = startIndex; i < endIndex; i++) {
+            if (filteredRows[i]) {
+                filteredRows[i].style.display = '';
+            }
+        }
+    }
+    
+    // Update pagination info
+    const showingStart = totalItems === 0 ? 0 : (itemsPerPage === 'all' ? 1 : (currentPage - 1) * itemsPerPage + 1);
+    const showingEnd = itemsPerPage === 'all' ? totalItems : Math.min(currentPage * itemsPerPage, totalItems);
+    
+    document.getElementById('showingStart').textContent = showingStart;
+    document.getElementById('showingEnd').textContent = showingEnd;
+    document.getElementById('totalItems').textContent = totalItems;
+    
+    // Update session count in header
+    document.getElementById('sessionCount').textContent = totalItems;
+    
+    // Update pagination controls
+    updatePaginationControls(totalPages);
+}
+
+// Update pagination control buttons
+function updatePaginationControls(totalPages) {
+    const paginationControls = document.getElementById('paginationControls');
+    const prevBtn = document.getElementById('prevPage');
+    const nextBtn = document.getElementById('nextPage');
+    const pageNumbers = document.getElementById('pageNumbers');
+    
+    // Hide pagination if showing all items or only one page
+    if (itemsPerPage === 'all' || totalPages <= 1) {
+        paginationControls.style.display = 'none';
+        return;
+    } else {
+        paginationControls.style.display = 'flex';
+    }
+    
+    // Update prev/next buttons
+    prevBtn.disabled = currentPage === 1;
+    nextBtn.disabled = currentPage === totalPages;
+    
+    // Generate page numbers
+    pageNumbers.innerHTML = '';
+    
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    if (endPage - startPage < maxVisiblePages - 1) {
+        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+    
+    if (startPage > 1) {
+        addPageButton(1);
+        if (startPage > 2) {
+            pageNumbers.innerHTML += '<span class="px-2 text-gray-500">...</span>';
+        }
+    }
+    
+    for (let page = startPage; page <= endPage; page++) {
+        addPageButton(page, page === currentPage);
+    }
+    
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            pageNumbers.innerHTML += '<span class="px-2 text-gray-500">...</span>';
+        }
+        addPageButton(totalPages);
+    }
+}
+
+// Add a page button
+function addPageButton(page, isActive = false) {
+    const pageNumbers = document.getElementById('pageNumbers');
+    const button = document.createElement('button');
+    button.textContent = page;
+    button.className = isActive 
+        ? 'px-3 py-1 text-sm bg-amber-600 text-white rounded border border-amber-500'
+        : 'px-3 py-1 text-sm bg-gray-700 text-gray-300 rounded border border-gray-600 hover:bg-gray-600';
+    
+    if (!isActive) {
+        button.addEventListener('click', () => {
+            currentPage = page;
+            updatePagination();
+        });
+    }
+    
+    pageNumbers.appendChild(button);
+}
+
+// Enhanced filter function to work with pagination
+function filterSessionsByRoaster() {
+    const selectedRoaster = roasterFilter.value;
+    
+    // Filter rows based on roaster selection
+    if (selectedRoaster) {
+        filteredRows = allRows.filter(row => row.getAttribute('data-roaster-id') === selectedRoaster);
+    } else {
+        filteredRows = [...allRows];
+    }
+    
+    // Re-sort the filtered results
+    sortTable(currentSort.column, currentSort.direction);
+    
+    // Reset to first page
+    currentPage = 1;
+    updatePagination();
+}
+
+// Event listeners for sorting
+document.addEventListener('click', (e) => {
+    const sortHeader = e.target.closest('th[data-sort]');
+    if (sortHeader) {
+        console.log('Sort header clicked:', sortHeader.dataset.sort);
+        const column = sortHeader.dataset.sort;
+        sortTable(column);
+    }
+});
+
+// Event listeners for pagination
+document.getElementById('prevPage').addEventListener('click', () => {
+    if (currentPage > 1) {
+        currentPage--;
+        updatePagination();
+    }
+});
+
+document.getElementById('nextPage').addEventListener('click', () => {
+    const totalPages = Math.ceil(filteredRows.length / itemsPerPage);
+    if (currentPage < totalPages) {
+        currentPage++;
+        updatePagination();
+    }
+});
+
+// Event listener for items per page
+document.getElementById('itemsPerPage').addEventListener('change', (e) => {
+    itemsPerPage = e.target.value === 'all' ? 'all' : parseInt(e.target.value);
+    currentPage = 1;
+    updatePagination();
+});
+
 // Initialize roaster options on page load
 loadRoasterOptions();
 loadNewRoastRoasterOptions();
+
+// Initialize table functionality after DOM is loaded
+console.log('DOM content loaded, checking for table rows...');
+const tableExists = document.querySelector('tbody') !== null;
+const rowsExist = document.querySelector('.session-row') !== null;
+console.log('Table exists:', tableExists, 'Rows exist:', rowsExist);
+
+if (tableExists && rowsExist) {
+    console.log('Initializing table with rows...');
+    initializeTable();
+} else {
+    console.log('No table rows found, table functionality will not be initialized');
+    // Hide pagination controls if no data
+    const paginationControls = document.getElementById('paginationControls');
+    if (paginationControls) {
+        paginationControls.style.display = 'none';
+    }
+}
 
 </script>
 {% endblock %}
