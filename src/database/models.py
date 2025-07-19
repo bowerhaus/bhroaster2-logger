@@ -36,11 +36,19 @@ class DatabaseManager:
                         end_time TEXT,
                         name TEXT NOT NULL,
                         status TEXT NOT NULL DEFAULT 'active',
+                        roaster_id TEXT NOT NULL DEFAULT 'BHR2',
                         first_crack_time TEXT,
                         first_crack_detected_by TEXT,
                         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
+                
+                # Add roaster_id column to existing tables (migration)
+                cursor.execute("PRAGMA table_info(roast_sessions)")
+                columns = [column[1] for column in cursor.fetchall()]
+                if 'roaster_id' not in columns:
+                    cursor.execute('ALTER TABLE roast_sessions ADD COLUMN roaster_id TEXT NOT NULL DEFAULT "BHR2"')
+                    logger.info("Added roaster_id column to roast_sessions table")
                 
                 # Create data_points table
                 cursor.execute('''
@@ -115,7 +123,7 @@ class DatabaseManager:
             logger.error(f"Failed to initialize database: {e}")
             raise
     
-    def create_roast_session(self, name: str) -> str:
+    def create_roast_session(self, name: str, roaster_id: str = "BHR2") -> str:
         """Create a new roast session and return its ID"""
         try:
             roast_id = str(uuid.uuid4())
@@ -124,12 +132,12 @@ class DatabaseManager:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    INSERT INTO roast_sessions (id, start_time, name, status)
-                    VALUES (?, ?, ?, 'active')
-                ''', (roast_id, start_time, name))
+                    INSERT INTO roast_sessions (id, start_time, name, status, roaster_id)
+                    VALUES (?, ?, ?, 'active', ?)
+                ''', (roast_id, start_time, name, roaster_id))
                 conn.commit()
                 
-            logger.info(f"Created roast session: {roast_id} - {name}")
+            logger.info(f"Created roast session: {roast_id} - {name} (Roaster: {roaster_id})")
             return roast_id
             
         except Exception as e:
@@ -181,21 +189,32 @@ class DatabaseManager:
             logger.error(f"Failed to add data point: {e}")
             return False
     
-    def get_roast_sessions(self, limit: int = 50) -> List[Dict]:
+    def get_roast_sessions(self, limit: int = 50, roaster_id: str = None) -> List[Dict]:
         """Get list of roast sessions"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 
-                cursor.execute('''
-                    SELECT id, start_time, end_time, name, status,
-                           (SELECT COUNT(*) FROM data_points WHERE roast_id = roast_sessions.id) as data_count,
-                           (SELECT MAX(value) FROM data_points WHERE roast_id = roast_sessions.id AND metric_type = 'temperature') as peak_temp
-                    FROM roast_sessions
-                    ORDER BY start_time DESC
-                    LIMIT ?
-                ''', (limit,))
+                if roaster_id:
+                    cursor.execute('''
+                        SELECT id, start_time, end_time, name, status, roaster_id,
+                               (SELECT COUNT(*) FROM data_points WHERE roast_id = roast_sessions.id) as data_count,
+                               (SELECT MAX(value) FROM data_points WHERE roast_id = roast_sessions.id AND metric_type = 'temperature') as peak_temp
+                        FROM roast_sessions
+                        WHERE roaster_id = ?
+                        ORDER BY start_time DESC
+                        LIMIT ?
+                    ''', (roaster_id, limit))
+                else:
+                    cursor.execute('''
+                        SELECT id, start_time, end_time, name, status, roaster_id,
+                               (SELECT COUNT(*) FROM data_points WHERE roast_id = roast_sessions.id) as data_count,
+                               (SELECT MAX(value) FROM data_points WHERE roast_id = roast_sessions.id AND metric_type = 'temperature') as peak_temp
+                        FROM roast_sessions
+                        ORDER BY start_time DESC
+                        LIMIT ?
+                    ''', (limit,))
                 
                 return [dict(row) for row in cursor.fetchall()]
                 
@@ -353,6 +372,45 @@ class DatabaseManager:
                 'is_recently_active': False
             }
     
+    def update_roast_roaster_id(self, roast_id: str, roaster_id: str) -> bool:
+        """Update the roaster_id for an existing roast session"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Check if roast exists and is not active
+                cursor.execute('''
+                    SELECT status FROM roast_sessions WHERE id = ?
+                ''', (roast_id,))
+                
+                result = cursor.fetchone()
+                if not result:
+                    logger.warning(f"No roast session found: {roast_id}")
+                    return False
+                
+                if result[0] == 'active':
+                    logger.warning(f"Cannot update roaster_id for active roast: {roast_id}")
+                    return False
+                
+                # Update roaster_id
+                cursor.execute('''
+                    UPDATE roast_sessions 
+                    SET roaster_id = ?
+                    WHERE id = ?
+                ''', (roaster_id, roast_id))
+                
+                if cursor.rowcount > 0:
+                    conn.commit()
+                    logger.info(f"Updated roaster_id for roast {roast_id} to {roaster_id}")
+                    return True
+                else:
+                    logger.warning(f"No roast session updated: {roast_id}")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Failed to update roaster_id: {e}")
+            return False
+
     def delete_roast_session(self, roast_id: str) -> bool:
         """Delete a roast session and all its data points"""
         try:

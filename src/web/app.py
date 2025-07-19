@@ -130,13 +130,17 @@ def roast_detail(roast_id):
 @app.route('/api/roasts', methods=['GET'])
 def get_roasts():
     """API endpoint to get all roast sessions"""
-    roasts = db_manager.get_roast_sessions()
+    roaster_id = request.args.get('roaster_id')
+    roasts = db_manager.get_roast_sessions(roaster_id=roaster_id)
     return jsonify(roasts)
 
 @app.route('/api/roasts', methods=['POST'])
 def start_roast():
     """API endpoint to start a new roast session"""
     global data_collector
+    
+    data = request.get_json() or {}
+    roaster_id = data.get('roaster_id', 'BHR2')  # Default to BHR2
     
     # Use timestamp as name
     name = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -147,7 +151,7 @@ def start_roast():
         return jsonify({'error': 'Another roast is already active'}), 400
     
     try:
-        roast_id = db_manager.create_roast_session(name)
+        roast_id = db_manager.create_roast_session(name, roaster_id)
         
         # Start data collection
         if data_collector:
@@ -161,10 +165,11 @@ def start_roast():
         socketio.emit('roast_started', {
             'roast_id': roast_id,
             'name': name,
+            'roaster_id': roaster_id,
             'start_time': datetime.now().isoformat()
         })
         
-        return jsonify({'roast_id': roast_id, 'name': name})
+        return jsonify({'roast_id': roast_id, 'name': name, 'roaster_id': roaster_id})
         
     except Exception as e:
         logger.error(f"Failed to start roast: {e}")
@@ -565,8 +570,29 @@ def get_config():
     return jsonify({
         'ui': config.get('ui', {}),
         'alerts': config.get('alerts', {}),
-        'first_crack': config.get('first_crack', {})
+        'first_crack': config.get('first_crack', {}),
+        'roaster_ids': config.get('roaster_ids', ['BHR2'])
     })
+
+@app.route('/api/roasts/<roast_id>/roaster', methods=['PUT'])
+def update_roast_roaster(roast_id):
+    """API endpoint to update roaster_id for a completed roast session"""
+    try:
+        data = request.get_json()
+        if not data or 'roaster_id' not in data:
+            return jsonify({'error': 'roaster_id is required'}), 400
+        
+        roaster_id = data['roaster_id']
+        success = db_manager.update_roast_roaster_id(roast_id, roaster_id)
+        
+        if success:
+            return jsonify({'message': 'Roaster ID updated successfully'})
+        else:
+            return jsonify({'error': 'Failed to update roaster ID (roast not found or is active)'}), 400
+            
+    except Exception as e:
+        logger.error(f"Failed to update roaster ID: {e}")
+        return jsonify({'error': 'Failed to update roaster ID'}), 500
 
 @app.route('/api/roasts/<roast_id>', methods=['DELETE'])
 def delete_roast(roast_id):

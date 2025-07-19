@@ -32,10 +32,37 @@
         </div>
         
         <div class="text-sm {% if roast_session.status == 'active' %}text-red-300{% else %}text-gray-300{% endif %} mb-4">
-            Started: {{ roast_session.start_time | replace('T', ' ') | replace('.', ' ') | truncate(19, True, '') }}
-            {% if roast_session.end_time %}
-                | Ended: {{ roast_session.end_time | replace('T', ' ') | replace('.', ' ') | truncate(19, True, '') }}
-            {% endif %}
+            <div class="flex items-center justify-between">
+                <div>
+                    Started: {{ roast_session.start_time | replace('T', ' ') | replace('.', ' ') | truncate(19, True, '') }}
+                    {% if roast_session.end_time %}
+                        | Ended: {{ roast_session.end_time | replace('T', ' ') | replace('.', ' ') | truncate(19, True, '') }}
+                    {% endif %}
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="text-amber-300">Roaster:</span>
+                    {% if roast_session.status == 'completed' %}
+                        <div id="roasterDisplay" class="flex items-center">
+                            <span id="roasterText" class="font-semibold text-amber-400">{{ roast_session.roaster_id or 'BHR2' }}</span>
+                            <button id="editRoasterBtn" class="ml-2 text-blue-400 hover:text-blue-300">
+                                <i class="fas fa-edit text-sm"></i>
+                            </button>
+                        </div>
+                        <div id="roasterEdit" class="hidden flex items-center space-x-2">
+                            <select id="roasterSelect" class="bg-gray-700 text-white px-2 py-1 rounded border border-gray-600 text-sm">
+                            </select>
+                            <button id="saveRoasterBtn" class="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-sm">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            <button id="cancelRoasterBtn" class="bg-gray-600 hover:bg-gray-700 text-white px-2 py-1 rounded text-sm">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    {% else %}
+                        <span class="font-semibold text-amber-400">{{ roast_session.roaster_id or 'BHR2' }}</span>
+                    {% endif %}
+                </div>
+            </div>
         </div>
         
         <!-- Metrics Banner -->
@@ -992,5 +1019,124 @@ if (markFCBtn) {
 } else {
     console.log('Mark FC button not found on page');
 }
+
+// Roaster ID editing functionality
+const editRoasterBtn = document.getElementById('editRoasterBtn');
+const saveRoasterBtn = document.getElementById('saveRoasterBtn');
+const cancelRoasterBtn = document.getElementById('cancelRoasterBtn');
+const roasterDisplay = document.getElementById('roasterDisplay');
+const roasterEdit = document.getElementById('roasterEdit');
+const roasterText = document.getElementById('roasterText');
+const roasterSelect = document.getElementById('roasterSelect');
+
+let originalRoasterId = '';
+
+// Load roaster options into the select dropdown
+async function loadRoasterOptions() {
+    if (!roasterSelect) return;
+    
+    try {
+        const response = await fetch('/api/config');
+        const config = await response.json();
+        const roasterIds = config.roaster_ids || ['BHR2'];
+        
+        // Clear existing options
+        roasterSelect.innerHTML = '';
+        
+        // Add configured roaster options
+        roasterIds.forEach(roasterId => {
+            const option = document.createElement('option');
+            option.value = roasterId;
+            option.textContent = roasterId;
+            roasterSelect.appendChild(option);
+        });
+        
+    } catch (error) {
+        console.error('Error loading roaster options:', error);
+    }
+}
+
+// Enter edit mode
+function enterEditMode() {
+    if (!roasterDisplay || !roasterEdit || !roasterText || !roasterSelect) return;
+    
+    originalRoasterId = roasterText.textContent;
+    roasterSelect.value = originalRoasterId;
+    
+    roasterDisplay.classList.add('hidden');
+    roasterEdit.classList.remove('hidden');
+}
+
+// Exit edit mode
+function exitEditMode() {
+    if (!roasterDisplay || !roasterEdit) return;
+    
+    roasterDisplay.classList.remove('hidden');
+    roasterEdit.classList.add('hidden');
+}
+
+// Save roaster ID changes
+async function saveRoasterChange() {
+    if (!roasterSelect || !roasterText) return;
+    
+    const newRoasterId = roasterSelect.value;
+    
+    try {
+        const response = await fetch(`/api/roasts/${roastId}/roaster`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                roaster_id: newRoasterId
+            })
+        });
+        
+        if (response.ok) {
+            roasterText.textContent = newRoasterId;
+            exitEditMode();
+            
+            // Show success notification
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+            notification.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fas fa-check mr-2"></i>
+                    <span>Roaster ID updated to ${newRoasterId}</span>
+                </div>
+            `;
+            document.body.appendChild(notification);
+            
+            // Remove notification after 3 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 3000);
+        } else {
+            const error = await response.json();
+            alert('Error updating roaster ID: ' + error.error);
+        }
+    } catch (error) {
+        alert('Error updating roaster ID: ' + error.message);
+    }
+}
+
+// Event listeners for roaster editing
+if (editRoasterBtn) {
+    editRoasterBtn.addEventListener('click', enterEditMode);
+}
+
+if (saveRoasterBtn) {
+    saveRoasterBtn.addEventListener('click', saveRoasterChange);
+}
+
+if (cancelRoasterBtn) {
+    cancelRoasterBtn.addEventListener('click', exitEditMode);
+}
+
+// Load roaster options on page load
+loadRoasterOptions();
+
 </script>
 {% endblock %}

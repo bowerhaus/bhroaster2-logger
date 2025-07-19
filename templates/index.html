@@ -102,9 +102,17 @@
                     <i class="fas fa-history mr-2"></i>
                     Recent Roast Sessions
                 </h3>
-                <div class="text-sm text-gray-400">
-                    <i class="fas fa-database mr-1"></i>
-                    {{ roast_sessions | length }} total sessions
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center">
+                        <label for="roasterFilter" class="text-sm text-gray-400 mr-2">Filter by Roaster:</label>
+                        <select id="roasterFilter" class="bg-gray-700 text-white px-3 py-1 rounded border border-gray-600 text-sm">
+                            <option value="">All Roasters</option>
+                        </select>
+                    </div>
+                    <div class="text-sm text-gray-400">
+                        <i class="fas fa-database mr-1"></i>
+                        <span id="sessionCount">{{ roast_sessions | length }}</span> sessions
+                    </div>
                 </div>
             </div>
         </div>
@@ -115,6 +123,7 @@
                 <thead>
                     <tr class="border-b border-gray-600">
                         <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Name</th>
+                        <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Roaster</th>
                         <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Start Time</th>
                         <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Duration</th>
                         <th class="px-4 py-3 text-left text-sm font-semibold text-gray-300">Peak Temp</th>
@@ -125,9 +134,12 @@
                 </thead>
                 <tbody>
                     {% for session in roast_sessions %}
-                    <tr class="border-b border-gray-700 hover:bg-gray-800/50 transition-colors duration-200{% if session.status == 'active' %} bg-red-900/20 border-red-500/30{% endif %}" data-roast-id="{{ session.id }}">
+                    <tr class="border-b border-gray-700 hover:bg-gray-800/50 transition-colors duration-200{% if session.status == 'active' %} bg-red-900/20 border-red-500/30{% endif %}" data-roast-id="{{ session.id }}" data-roaster-id="{{ session.roaster_id or 'BHR2' }}">
                         <td class="px-4 py-3">
                             <div class="text-sm font-medium text-white">{{ session.name }}</div>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="text-sm text-amber-300 font-medium">{{ session.roaster_id or 'BHR2' }}</div>
                         </td>
                         <td class="px-4 py-3">
                             <div class="text-sm text-gray-300">{{ session.start_time | replace('T', ' ') | replace('.', ' ') | truncate(19, True, '') }}</div>
@@ -197,6 +209,31 @@
     </div>
 </div>
 
+<!-- Roaster Selection Dialog -->
+<div id="roasterModal" class="fixed inset-0 bg-black bg-opacity-75 hidden items-center justify-center z-50">
+    <div class="glass-card rounded-xl p-6 max-w-sm mx-4 shadow-xl glow-green">
+        <div class="text-center">
+            <div class="text-green-400 mb-4">
+                <i class="fas fa-fire text-3xl"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-3">Start New Roast</h3>
+            <p class="text-sm text-gray-300 mb-4">Select which roaster to use:</p>
+            <div class="mb-6">
+                <select id="newRoastRoasterSelect" class="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600">
+                </select>
+            </div>
+            <div class="flex space-x-3">
+                <button id="cancelNewRoast" class="flex-1 px-4 py-2 text-sm glass-card border border-gray-500 rounded-lg text-gray-300 hover:bg-gray-700/50 transition-colors">
+                    Cancel
+                </button>
+                <button id="confirmNewRoast" class="flex-1 px-4 py-2 text-sm bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg transition-all duration-300">
+                    Start Roast
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Dark Modern Delete Confirmation Dialog -->
 <div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-75 hidden items-center justify-center z-50">
     <div class="glass-card rounded-xl p-6 max-w-sm mx-4 shadow-xl glow-red">
@@ -229,19 +266,71 @@ const socket = io();
 const startRoastBtn = document.getElementById('startRoastBtn');
 const startFirstRoastBtn = document.getElementById('startFirstRoastBtn');
 const stopRoastBtn = document.getElementById('stopRoastBtn');
+const roasterFilter = document.getElementById('roasterFilter');
 
-// Handle start roast
+// Roaster selection modal elements
+const roasterModal = document.getElementById('roasterModal');
+const newRoastRoasterSelect = document.getElementById('newRoastRoasterSelect');
+const cancelNewRoast = document.getElementById('cancelNewRoast');
+const confirmNewRoast = document.getElementById('confirmNewRoast');
+
+// Show roaster selection modal
+function showRoasterModal() {
+    roasterModal.classList.remove('hidden');
+    roasterModal.classList.add('flex');
+}
+
+// Hide roaster selection modal
+function hideRoasterModal() {
+    roasterModal.classList.add('hidden');
+    roasterModal.classList.remove('flex');
+}
+
+// Load roaster options for new roast modal
+async function loadNewRoastRoasterOptions() {
+    try {
+        const response = await fetch('/api/config');
+        const config = await response.json();
+        const roasterIds = config.roaster_ids || ['BHR2'];
+        
+        // Clear existing options
+        newRoastRoasterSelect.innerHTML = '';
+        
+        // Add configured roaster options
+        roasterIds.forEach(roasterId => {
+            const option = document.createElement('option');
+            option.value = roasterId;
+            option.textContent = roasterId;
+            newRoastRoasterSelect.appendChild(option);
+        });
+        
+        // Select first option by default
+        if (roasterIds.length > 0) {
+            newRoastRoasterSelect.value = roasterIds[0];
+        }
+        
+    } catch (error) {
+        console.error('Error loading roaster options for new roast:', error);
+    }
+}
+
+// Handle start roast with roaster selection
 async function startRoast() {
+    const selectedRoasterId = newRoastRoasterSelect.value;
+    
     try {
         const response = await fetch('/api/roasts', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({})
+            body: JSON.stringify({
+                roaster_id: selectedRoasterId
+            })
         });
         
         if (response.ok) {
+            hideRoasterModal();
             location.reload(); // Refresh page to show new roast
         } else {
             const error = await response.json();
@@ -254,12 +343,30 @@ async function startRoast() {
 
 // Event listeners
 if (startRoastBtn) {
-    startRoastBtn.addEventListener('click', startRoast);
+    startRoastBtn.addEventListener('click', showRoasterModal);
 }
 
 if (startFirstRoastBtn) {
-    startFirstRoastBtn.addEventListener('click', startRoast);
+    startFirstRoastBtn.addEventListener('click', showRoasterModal);
 }
+
+// Roaster modal event listeners
+cancelNewRoast.addEventListener('click', hideRoasterModal);
+confirmNewRoast.addEventListener('click', startRoast);
+
+// Close modal on backdrop click
+roasterModal.addEventListener('click', (e) => {
+    if (e.target === roasterModal) {
+        hideRoasterModal();
+    }
+});
+
+// Close modal on escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !roasterModal.classList.contains('hidden')) {
+        hideRoasterModal();
+    }
+});
 
 // Handle stop roast
 if (stopRoastBtn) {
@@ -537,6 +644,78 @@ document.addEventListener('keydown', (e) => {
         hideDeleteModal();
     }
 });
+
+// Roaster filtering functionality
+let availableRoasters = new Set();
+let allSessions = [];
+
+// Populate roaster filter dropdown
+async function loadRoasterOptions() {
+    try {
+        const response = await fetch('/api/config');
+        const config = await response.json();
+        const roasterIds = config.roaster_ids || ['BHR2'];
+        
+        // Clear existing options except "All Roasters"
+        roasterFilter.innerHTML = '<option value="">All Roasters</option>';
+        
+        // Add configured roaster options
+        roasterIds.forEach(roasterId => {
+            const option = document.createElement('option');
+            option.value = roasterId;
+            option.textContent = roasterId;
+            roasterFilter.appendChild(option);
+            availableRoasters.add(roasterId);
+        });
+        
+        // Add any additional roasters found in existing sessions
+        document.querySelectorAll('tr[data-roaster-id]').forEach(row => {
+            const roasterId = row.dataset.roasterId;
+            if (roasterId && !availableRoasters.has(roasterId)) {
+                const option = document.createElement('option');
+                option.value = roasterId;
+                option.textContent = roasterId;
+                roasterFilter.appendChild(option);
+                availableRoasters.add(roasterId);
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error loading roaster options:', error);
+    }
+}
+
+// Filter sessions by roaster
+function filterSessionsByRoaster() {
+    const selectedRoaster = roasterFilter.value;
+    const rows = document.querySelectorAll('tbody tr[data-roaster-id]');
+    let visibleCount = 0;
+    
+    rows.forEach(row => {
+        const roasterId = row.dataset.roasterId;
+        const shouldShow = !selectedRoaster || roasterId === selectedRoaster;
+        
+        if (shouldShow) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // Update session count
+    const sessionCountElement = document.getElementById('sessionCount');
+    if (sessionCountElement) {
+        sessionCountElement.textContent = visibleCount;
+    }
+}
+
+// Event listener for roaster filter
+roasterFilter.addEventListener('change', filterSessionsByRoaster);
+
+// Initialize roaster options on page load
+loadRoasterOptions();
+loadNewRoastRoasterOptions();
 
 </script>
 {% endblock %}

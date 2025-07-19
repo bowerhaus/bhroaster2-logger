@@ -45,5 +45,10 @@
     "CONFIDENCE_THRESHOLD": 0.50,
     "MIN_TEMP_FOR_FC": 30,
     "LOOKAHEAD_SECONDS": 30
-  }
+  },
+  "roaster_ids": [
+    "BHR2",
+    "BHR2-F",
+    "Test"
+  ]
 }
