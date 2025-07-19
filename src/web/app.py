@@ -212,17 +212,21 @@ def get_roast_data(roast_id):
     return jsonify(enhanced_data)
 
 def calculate_computed_metric(temp, humidity):
-    """Calculate absolute humidity: AH = (6.112 * exp((17.67 * T)/(T+243.5)) * RH * 2.1674)/((273.15+T))"""
+    """Calculate absolute humidity using formula: double RHtoAbsolute (float relHumidity, float tempC)"""
     import math
     if temp is not None and humidity is not None:
-        # T is temperature in Celsius, RH is relative humidity in %
-        T = temp
-        RH = humidity
+        # Using the provided formula
+        # double eSat = 6.11 * pow(10.0, (7.5 * tempC / (237.7 + tempC)));
+        eSat = 6.11 * pow(10.0, (7.5 * temp / (237.7 + temp)))
         
-        # Calculate absolute humidity in g/m³
-        result = (6.112 * math.exp((17.67 * T)/(T + 243.5)) * RH * 2.1674) / (273.15 + T)
-        logger.debug(f"Absolute humidity: T={temp}°C, RH={humidity}% -> {result:.2f} g/m³")
-        return result
+        # double vaporPressure = (relHumidity * eSat) / 100; //millibars
+        vaporPressure = (humidity * eSat) / 100
+        
+        # double absHumidity = 1000 * vaporPressure * 100 / ((tempC + 273) * 461.5); //Ideal gas law with unit conversions
+        absHumidity = 1000 * vaporPressure * 100 / ((temp + 273) * 461.5)
+        
+        logger.debug(f"Absolute humidity: T={temp}°C, RH={humidity}% -> {absHumidity:.2f} g/m³")
+        return absHumidity
     return None
 
 def add_computed_metrics(data):
