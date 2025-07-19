@@ -110,16 +110,18 @@ def roast_detail(roast_id):
         return "Roast not found", 404
     
     roast_data = db_manager.get_roast_data(roast_id)
+    enhanced_data = add_computed_metrics(roast_data)
     
     # Debug: Log first few data points
-    if roast_data:
-        logger.info(f"Roast {roast_id} has {len(roast_data)} data points")
-        for i, point in enumerate(roast_data[:3]):
+    if enhanced_data:
+        computed_count = len([p for p in enhanced_data if p['metric_type'] == 'computed'])
+        logger.info(f"Roast {roast_id} has {len(enhanced_data)} data points (including {computed_count} computed)")
+        for i, point in enumerate(enhanced_data[:5]):
             logger.info(f"  Point {i}: {point['timestamp']} - {point['metric_type']} = {point['value']}")
     
     return render_template('roast_detail.html',
                          roast_session=roast_session,
-                         roast_data=roast_data)
+                         roast_data=enhanced_data)
 
 @app.route('/api/roasts', methods=['GET'])
 def get_roasts():
@@ -197,7 +199,79 @@ def stop_roast(roast_id):
 def get_roast_data(roast_id):
     """API endpoint to get data for a specific roast"""
     data = db_manager.get_roast_data(roast_id)
-    return jsonify(data)
+    enhanced_data = add_computed_metrics(data)
+    return jsonify(enhanced_data)
+
+def calculate_computed_metric(temp, humidity):
+    """Calculate absolute humidity: AH = (6.112 * exp((17.67 * T)/(T+243.5)) * RH * 2.1674)/((273.15+T))"""
+    import math
+    if temp is not None and humidity is not None:
+        # T is temperature in Celsius, RH is relative humidity in %
+        T = temp
+        RH = humidity
+        
+        # Calculate absolute humidity in g/m³
+        result = (6.112 * math.exp((17.67 * T)/(T + 243.5)) * RH * 2.1674) / (273.15 + T)
+        logger.debug(f"Absolute humidity: T={temp}°C, RH={humidity}% -> {result:.2f} g/m³")
+        return result
+    return None
+
+def add_computed_metrics(data):
+    """Add computed metrics to data based on temperature and humidity readings"""
+    enhanced_data = []
+    temp_readings = []
+    humidity_readings = []
+    
+    # Collect temperature and humidity readings separately
+    for data_point in data:
+        if data_point['metric_type'] == 'temperature':
+            temp_readings.append((data_point['timestamp'], data_point['value']))
+        elif data_point['metric_type'] == 'humidity':
+            humidity_readings.append((data_point['timestamp'], data_point['value']))
+        enhanced_data.append(data_point)
+    
+    # Sort readings by timestamp
+    temp_readings.sort()
+    humidity_readings.sort()
+    
+    # Match temperature and humidity readings that are close in time (within 1 second)
+    computed_count = 0
+    temp_idx = 0
+    humidity_idx = 0
+    
+    while temp_idx < len(temp_readings) and humidity_idx < len(humidity_readings):
+        temp_time, temp_value = temp_readings[temp_idx]
+        humidity_time, humidity_value = humidity_readings[humidity_idx]
+        
+        # Parse timestamps for comparison
+        temp_dt = datetime.fromisoformat(temp_time.replace('Z', '+00:00'))
+        humidity_dt = datetime.fromisoformat(humidity_time.replace('Z', '+00:00'))
+        
+        time_diff = abs((temp_dt - humidity_dt).total_seconds())
+        
+        if time_diff <= 1.0:  # Within 1 second
+            computed_value = calculate_computed_metric(temp_value, humidity_value)
+            if computed_value is not None:
+                # Use the later timestamp for the computed value
+                computed_timestamp = temp_time if temp_dt > humidity_dt else humidity_time
+                enhanced_data.append({
+                    'timestamp': computed_timestamp,
+                    'metric_type': 'computed',
+                    'value': computed_value
+                })
+                computed_count += 1
+            temp_idx += 1
+            humidity_idx += 1
+        elif temp_dt < humidity_dt:
+            temp_idx += 1
+        else:
+            humidity_idx += 1
+    
+    logger.debug(f"Generated {computed_count} computed metrics from {len(temp_readings)} temp and {len(humidity_readings)} humidity readings")
+    
+    # Sort by timestamp to maintain chronological order
+    enhanced_data.sort(key=lambda x: x['timestamp'])
+    return enhanced_data
 
 @app.route('/api/roasts/<roast_id>/live-data', methods=['GET'])
 def get_live_data(roast_id):
@@ -212,6 +286,9 @@ def get_live_data(roast_id):
         latest_data = db_manager.get_latest_data_point(roast_id)
         new_data = [latest_data] if latest_data else []
     
+    # Add computed metrics to the data
+    enhanced_data = add_computed_metrics(new_data)
+    
     # Get current active session status
     active_session = db_manager.get_active_roast_session()
     is_active = active_session and active_session['id'] == roast_id
@@ -223,21 +300,21 @@ def get_live_data(roast_id):
     # Check if current temperature exceeds alert threshold
     temp_alert = False
     latest_temp = None
-    for data_point in reversed(new_data):
+    for data_point in reversed(enhanced_data):
         if data_point['metric_type'] == 'temperature':
             latest_temp = data_point['value']
             temp_alert = latest_temp >= max_temp_alert
             break
     
     # If no new data, check the latest temperature from database
-    if latest_temp is None and not new_data:
+    if latest_temp is None and not enhanced_data:
         latest_data = db_manager.get_latest_data_point(roast_id)
         if latest_data and latest_data['metric_type'] == 'temperature':
             latest_temp = latest_data['value']
             temp_alert = latest_temp >= max_temp_alert
     
     return jsonify({
-        'data': new_data,
+        'data': enhanced_data,
         'is_active': is_active,
         'temperature_alert': temp_alert,
         'latest_temperature': latest_temp,

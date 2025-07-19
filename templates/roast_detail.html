@@ -109,20 +109,29 @@
             </h3>
             <div class="flex items-center space-x-4 flex-wrap">
                 <div class="flex items-center">
+                    <input type="checkbox" id="toggleTemp" class="mr-1" checked>
                     <div class="w-3 h-3 bg-green-500 rounded-full mr-2" id="tempLegendColor"></div>
-                    <span class="text-sm text-green-300" id="tempLegendText">Temperature (°C)</span>
+                    <span class="text-sm text-green-300 cursor-pointer" id="tempLegendText" onclick="document.getElementById('toggleTemp').click()">Temperature (°C)</span>
                 </div>
                 <div class="flex items-center">
+                    <input type="checkbox" id="toggleHumidity" class="mr-1" checked>
                     <div class="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
-                    <span class="text-sm text-blue-300">Humidity (%)</span>
+                    <span class="text-sm text-blue-300 cursor-pointer" onclick="document.getElementById('toggleHumidity').click()">Humidity (%)</span>
                 </div>
                 <div class="flex items-center">
+                    <input type="checkbox" id="toggleCO2" class="mr-1" checked>
                     <div class="w-3 h-3 bg-purple-500 rounded-full mr-2"></div>
-                    <span class="text-sm text-purple-300">CO2 (ppm)</span>
+                    <span class="text-sm text-purple-300 cursor-pointer" onclick="document.getElementById('toggleCO2').click()">CO2 (ppm)</span>
                 </div>
                 <div class="flex items-center">
+                    <input type="checkbox" id="toggleVOC" class="mr-1" checked>
                     <div class="w-3 h-3 bg-orange-500 rounded-full mr-2"></div>
-                    <span class="text-sm text-orange-300">VOC (ppb)</span>
+                    <span class="text-sm text-orange-300 cursor-pointer" onclick="document.getElementById('toggleVOC').click()">VOC (ppb)</span>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="toggleComputed" class="mr-1" checked>
+                    <div class="w-3 h-3 bg-yellow-500 rounded-full mr-2"></div>
+                    <span class="text-sm text-yellow-300 cursor-pointer" onclick="document.getElementById('toggleComputed').click()">Abs Humidity (g/m³)</span>
                 </div>
             </div>
         </div>
@@ -180,6 +189,15 @@ const chart = new Chart(ctx, {
             backgroundColor: 'rgba(249, 115, 22, 0.1)',
             tension: 0.1,
             yAxisID: 'y3',
+            pointRadius: 0,
+            pointHoverRadius: 3
+        }, {
+            label: 'Abs Humidity (g/m³)',
+            data: [],
+            borderColor: 'rgb(234, 179, 8)',
+            backgroundColor: 'rgba(234, 179, 8, 0.1)',
+            tension: 0.1,
+            yAxisID: 'y4',
             pointRadius: 0,
             pointHoverRadius: 3
         }]
@@ -256,6 +274,19 @@ const chart = new Chart(ctx, {
                 grid: {
                     drawOnChartArea: false,
                 },
+            },
+            y4: {
+                type: 'linear',
+                display: true,
+                position: 'left',
+                title: {
+                    display: true,
+                    text: 'Abs Humidity (g/m³)'
+                },
+                grid: {
+                    drawOnChartArea: false,
+                },
+                offset: true
             }
         },
         plugins: {
@@ -272,12 +303,16 @@ const roastId = '{{ roast_session.id }}';
 const isActive = {{ 'true' if roast_session.status == 'active' else 'false' }};
 
 // Process and display data
+console.log('Total roast data points received:', roastData.length);
+console.log('Data point types:', roastData.map(p => p.metric_type).filter((v, i, a) => a.indexOf(v) === i));
+
 if (roastData.length > 0) {
     const startTime = new Date(roastData[0].timestamp);
     const tempData = [];
     const humidityData = [];
     const co2Data = [];
     const vocData = [];
+    const computedData = [];
     const labels = [];
     
     let totalTemp = 0;
@@ -321,6 +356,8 @@ if (roastData.length > 0) {
             totalVOC += point.value;
             vocCount++;
             maxVOC = Math.max(maxVOC, point.value);
+        } else if (point.metric_type === 'computed') {
+            computedData.push({x: elapsedMinutes, y: point.value});
         }
     });
     
@@ -329,12 +366,14 @@ if (roastData.length > 0) {
     console.log('Humidity data points:', humidityData.slice(0, 5));
     console.log('CO2 data points:', co2Data.slice(0, 5));
     console.log('VOC data points:', vocData.slice(0, 5));
+    console.log('Computed data points:', computedData.slice(0, 5));
     
     // Update chart
     chart.data.datasets[0].data = tempData;
     chart.data.datasets[1].data = humidityData;
     chart.data.datasets[2].data = co2Data;
     chart.data.datasets[3].data = vocData;
+    chart.data.datasets[4].data = computedData;
     chart.update();
     
     // Update statistics
@@ -452,6 +491,8 @@ async function pollForLiveData() {
                     if (currentVOCElement) {
                         currentVOCElement.textContent = `${dataPoint.value.toFixed(0)} ppb`;
                     }
+                } else if (dataPoint.metric_type === 'computed') {
+                    chart.data.datasets[4].data.push({x: elapsedMinutes, y: dataPoint.value});
                 }
                 
                 // Update data count
@@ -483,7 +524,8 @@ async function pollForLiveData() {
                 ...chart.data.datasets[0].data, 
                 ...chart.data.datasets[1].data,
                 ...chart.data.datasets[2].data,
-                ...chart.data.datasets[3].data
+                ...chart.data.datasets[3].data,
+                ...chart.data.datasets[4].data
             ];
             if (allData.length > 0) {
                 const maxTime = Math.max(...allData.map(p => p.x));
@@ -562,5 +604,43 @@ socket.on('roast_stopped', (data) => {
         setTimeout(() => location.reload(), 1000);
     }
 });
+
+// Toggle functionality for chart datasets
+function setupToggleControls() {
+    const toggles = [
+        { id: 'toggleTemp', dataset: 0, axis: 'y' },
+        { id: 'toggleHumidity', dataset: 1, axis: 'y1' },
+        { id: 'toggleCO2', dataset: 2, axis: 'y2' },
+        { id: 'toggleVOC', dataset: 3, axis: 'y3' },
+        { id: 'toggleComputed', dataset: 4, axis: 'y4' }
+    ];
+    
+    toggles.forEach(toggle => {
+        const checkbox = document.getElementById(toggle.id);
+        if (checkbox) {
+            checkbox.addEventListener('change', function() {
+                const dataset = chart.data.datasets[toggle.dataset];
+                const axis = chart.options.scales[toggle.axis];
+                
+                if (this.checked) {
+                    dataset.hidden = false;
+                    if (toggle.axis === 'y' || toggle.axis === 'y1' || toggle.axis === 'y4') {
+                        axis.display = true;
+                    }
+                } else {
+                    dataset.hidden = true;
+                    // Only hide axis if it's not a primary axis (y, y1, y4 are visible by default)
+                    if (toggle.axis === 'y2' || toggle.axis === 'y3') {
+                        axis.display = false;
+                    }
+                }
+                chart.update();
+            });
+        }
+    });
+}
+
+// Initialize toggle controls after chart is created
+setupToggleControls();
 </script>
 {% endblock %}
