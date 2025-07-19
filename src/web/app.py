@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -15,6 +15,7 @@ from sensors.managed_sht31 import ManagedSHT31Sensor
 from sensors.managed_sgp30 import ManagedSGP30Sensor
 from sensors.sensor_manager import sensor_manager
 from services.data_collector import DataCollector
+from services.first_crack_detector import FirstCrackDetector
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 logging.getLogger('services.data_collector').setLevel(logging.DEBUG)
 logging.getLogger('sensors.managed_dht22').setLevel(logging.DEBUG)
 logging.getLogger('sensors.sensor_manager').setLevel(logging.DEBUG)
+logging.getLogger('database.models').setLevel(logging.DEBUG)
 
 app = Flask(__name__, 
            template_folder='../../templates',
@@ -37,6 +39,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 db_manager = None
 sensors = {}
 data_collector = None
+first_crack_detector = None
 
 def load_config():
     """Load configuration from config.json"""
@@ -289,9 +292,50 @@ def get_live_data(roast_id):
     # Add computed metrics to the data
     enhanced_data = add_computed_metrics(new_data)
     
-    # Get current active session status
+    # Check for first crack detection if this is an active roast
+    first_crack_detected = None
     active_session = db_manager.get_active_roast_session()
     is_active = active_session and active_session['id'] == roast_id
+    
+    if is_active and first_crack_detector and enhanced_data:
+        # Get recent data for first crack analysis (last 2 minutes)
+        recent_data = db_manager.get_data_since(roast_id, 
+            (datetime.now() - timedelta(minutes=2)).isoformat())
+        
+        # Add computed metrics to recent data for analysis
+        recent_enhanced = add_computed_metrics(recent_data)
+        
+        # Check if first crack already detected
+        existing_fc = db_manager.get_first_crack_event(roast_id)
+        
+        if not existing_fc and recent_enhanced:
+            # Analyze for first crack
+            current_timestamp = enhanced_data[-1]['timestamp']
+            fc_result = first_crack_detector.analyze_data_point(recent_enhanced, current_timestamp)
+            
+            if fc_result:
+                # First crack detected! Save to database
+                success = db_manager.add_first_crack_event(
+                    roast_id=roast_id,
+                    timestamp=fc_result['timestamp'],
+                    detection_method=fc_result['detection_method'],
+                    confidence_score=fc_result['confidence_score'],
+                    signal_scores=fc_result['signal_scores'],
+                    current_temperature=fc_result['current_temperature']
+                )
+                
+                if success:
+                    first_crack_detected = fc_result
+                    logger.info(f"🔥 FIRST CRACK DETECTED for roast {roast_id} at {fc_result['timestamp']} "
+                              f"(confidence: {fc_result['confidence_score']:.2f})")
+                    
+                    # Emit real-time notification
+                    socketio.emit('first_crack_detected', {
+                        'roast_id': roast_id,
+                        'timestamp': fc_result['timestamp'],
+                        'confidence_score': fc_result['confidence_score'],
+                        'current_temperature': fc_result['current_temperature']
+                    })
     
     # Get temperature alert threshold from config
     config = load_config()
@@ -313,14 +357,97 @@ def get_live_data(roast_id):
             latest_temp = latest_data['value']
             temp_alert = latest_temp >= max_temp_alert
     
+    # Get first crack info
+    first_crack_event = db_manager.get_first_crack_event(roast_id)
+    
     return jsonify({
         'data': enhanced_data,
         'is_active': is_active,
         'temperature_alert': temp_alert,
         'latest_temperature': latest_temp,
         'max_temp_threshold': max_temp_alert,
+        'first_crack_detected': first_crack_detected,
+        'first_crack_event': first_crack_event,
         'timestamp': datetime.now().isoformat()
     })
+
+@app.route('/api/roasts/<roast_id>/first-crack', methods=['GET'])
+def get_first_crack(roast_id):
+    """API endpoint to get first crack event for a roast"""
+    first_crack_event = db_manager.get_first_crack_event(roast_id)
+    if first_crack_event:
+        return jsonify(first_crack_event)
+    else:
+        return jsonify({'error': 'No first crack event found'}), 404
+
+@app.route('/api/roasts/<roast_id>/first-crack', methods=['POST'])
+def mark_first_crack_manual(roast_id):
+    """API endpoint to manually mark first crack"""
+    try:
+        # First, verify the roast exists
+        roast_session = db_manager.get_roast_session(roast_id)
+        if not roast_session:
+            logger.error(f"Attempted to mark first crack for non-existent roast: {roast_id}")
+            return jsonify({'error': f'Roast session {roast_id} not found'}), 404
+        
+        data = request.get_json() or {}
+        timestamp = data.get('timestamp', datetime.now().isoformat())
+        notes = data.get('notes', 'Manually marked')
+        
+        logger.info(f"Marking first crack for roast {roast_id} ({roast_session['name']}) at {timestamp}")
+        
+        # Get current temperature if available
+        latest_data = db_manager.get_latest_data_point(roast_id)
+        current_temp = None
+        if latest_data and latest_data['metric_type'] == 'temperature':
+            current_temp = latest_data['value']
+        
+        logger.debug(f"Current temperature for FC: {current_temp}")
+        
+        success = db_manager.add_first_crack_event(
+            roast_id=roast_id,
+            timestamp=timestamp,
+            detection_method='manual',
+            confidence_score=1.0,
+            current_temperature=current_temp,
+            notes=notes
+        )
+        
+        logger.info(f"First crack event creation success: {success}")
+        
+        if success:
+            # Emit real-time notification
+            socketio.emit('first_crack_detected', {
+                'roast_id': roast_id,
+                'timestamp': timestamp,
+                'confidence_score': 1.0,
+                'detection_method': 'manual',
+                'current_temperature': current_temp
+            })
+            
+            logger.info(f"First crack marked successfully for roast {roast_id}")
+            return jsonify({'message': 'First crack marked successfully', 'timestamp': timestamp})
+        else:
+            logger.error(f"Database returned false when adding first crack event for roast {roast_id}")
+            return jsonify({'error': 'Failed to mark first crack - database operation failed'}), 400
+            
+    except Exception as e:
+        logger.error(f"Exception when marking first crack manually for roast {roast_id}: {e}", exc_info=True)
+        return jsonify({'error': f'Failed to mark first crack: {str(e)}'}), 500
+
+@app.route('/api/roasts/<roast_id>/first-crack', methods=['DELETE'])
+def delete_first_crack(roast_id):
+    """API endpoint to delete first crack event"""
+    try:
+        success = db_manager.delete_first_crack_event(roast_id)
+        if success:
+            return jsonify({'message': 'First crack event deleted successfully'})
+        else:
+            return jsonify({'error': 'No first crack event found to delete'}), 404
+            
+    except Exception as e:
+        logger.error(f"Failed to delete first crack: {e}")
+        return jsonify({'error': 'Failed to delete first crack'}), 500
 
 @app.route('/api/config', methods=['GET'])
 def get_config():
@@ -328,7 +455,8 @@ def get_config():
     config = load_config()
     return jsonify({
         'ui': config.get('ui', {}),
-        'alerts': config.get('alerts', {})
+        'alerts': config.get('alerts', {}),
+        'first_crack': config.get('first_crack', {})
     })
 
 @app.route('/api/roasts/<roast_id>', methods=['DELETE'])
@@ -367,7 +495,7 @@ def handle_disconnect():
 
 def run_app():
     """Initialize and run the Flask application"""
-    global db_manager, data_collector
+    global db_manager, data_collector, first_crack_detector
     
     try:
         # Load configuration
@@ -386,6 +514,11 @@ def run_app():
         # Initialize data collector
         sample_rate = config['logging']['sample_rate']
         data_collector = DataCollector(sensors, db_manager, socketio, sample_rate)
+        
+        # Initialize first crack detector
+        fc_config = config.get('first_crack', {})
+        first_crack_detector = FirstCrackDetector(fc_config)
+        logger.info(f"FirstCrackDetector initialized with config: {fc_config}")
         
         # Check for active roasts and close them (app restart should end active roasts)
         active_session = db_manager.get_active_roast_session()

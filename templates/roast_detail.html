@@ -133,6 +133,16 @@
                     <div class="w-3 h-3 bg-yellow-500 rounded-full mr-2"></div>
                     <span class="text-sm text-yellow-300 cursor-pointer" onclick="document.getElementById('toggleComputed').click()">Abs Humidity (g/m³)</span>
                 </div>
+                <div class="flex items-center">
+                    <div class="w-3 h-0.5 bg-red-500 mr-2"></div>
+                    <span class="text-sm text-red-300">First Crack (FC)</span>
+                </div>
+                {% if roast_session.status == 'active' %}
+                <button id="markFirstCrackBtn" class="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white px-4 py-2 text-xs rounded-lg font-semibold transition-all duration-300 shadow-lg glow-red">
+                    <i class="fas fa-fire mr-1"></i>
+                    <span id="markFCText">Mark FC</span>
+                </button>
+                {% endif %}
             </div>
         </div>
         
@@ -148,6 +158,57 @@
 <script>
 // Initialize Socket.IO connection
 const socket = io();
+
+// Custom plugin for first crack line
+const firstCrackPlugin = {
+    id: 'firstCrackLine',
+    afterDraw: function(chart) {
+        if (chart.fcMarkerX !== null && chart.fcMarkerX !== undefined) {
+            const ctx = chart.ctx;
+            const chartArea = chart.chartArea;
+            
+            // Calculate pixel position for the marker
+            const x = chart.scales.x.getPixelForValue(chart.fcMarkerX);
+            
+            if (x >= chartArea.left && x <= chartArea.right) {
+                // Draw dashed vertical line
+                ctx.save();
+                ctx.setLineDash([5, 5]);
+                ctx.strokeStyle = 'rgb(239, 68, 68)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(x, chartArea.top);
+                ctx.lineTo(x, chartArea.bottom);
+                ctx.stroke();
+                
+                // Draw label
+                const labelText = chart.fcMarkerLabel || 'FC';
+                ctx.font = 'bold 12px Arial';
+                ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
+                ctx.textAlign = 'center';
+                
+                // Background for label
+                const textMetrics = ctx.measureText(labelText);
+                const labelWidth = textMetrics.width + 8;
+                const labelHeight = 20;
+                const labelX = x - labelWidth / 2;
+                const labelY = chartArea.top + 10;
+                
+                ctx.fillStyle = 'rgba(239, 68, 68, 0.8)';
+                ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
+                
+                // Label text
+                ctx.fillStyle = 'white';
+                ctx.fillText(labelText, x, labelY + 14);
+                
+                ctx.restore();
+            }
+        }
+    }
+};
+
+// Register custom plugin
+Chart.register(firstCrackPlugin);
 
 // Chart configuration
 const ctx = document.getElementById('roastChart').getContext('2d');
@@ -642,5 +703,152 @@ function setupToggleControls() {
 
 // Initialize toggle controls after chart is created
 setupToggleControls();
+
+// First crack functionality
+let firstCrackEvent = null;
+
+function updateFirstCrackMarker(fcEvent) {
+    if (!fcEvent) {
+        // Hide first crack marker
+        chart.fcMarkerX = null;
+        chart.fcMarkerLabel = null;
+        chart.update('none');
+        return;
+    }
+    
+    // Calculate elapsed time for first crack
+    const fcTimestamp = new Date(fcEvent.timestamp);
+    const elapsedMinutes = (fcTimestamp - roastStartTime) / 60000;
+    
+    // Update marker position and label
+    chart.fcMarkerX = elapsedMinutes;
+    chart.fcMarkerLabel = fcEvent.detection_method === 'manual' ? 'FC (Manual)' : 
+        `FC (${(fcEvent.confidence_score * 100).toFixed(0)}%)`;
+    
+    chart.update('none');
+    
+    console.log(`🔥 First crack marker updated at ${elapsedMinutes.toFixed(1)} minutes`);
+}
+
+function markFirstCrackManually() {
+    console.log('🔥 markFirstCrackManually() called');
+    console.log('Current roastId:', roastId);
+    console.log('Current firstCrackEvent:', firstCrackEvent);
+    
+    // If FC already exists, delete it first, then mark new one
+    const markFC = () => {
+        console.log('🔥 Executing markFC() - making POST request');
+        
+        const requestBody = {
+            notes: 'Manually marked via UI'
+        };
+        console.log('Request body:', requestBody);
+        fetch(`/api/roasts/${roastId}/first-crack`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                notes: 'Manually marked via UI'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Error marking first crack:', data.error);
+            } else {
+                console.log('First crack marked successfully:', data);
+                // The socket event will update the UI automatically
+            }
+        })
+        .catch(error => {
+            console.error('Error marking first crack:', error);
+        });
+    };
+    
+    if (firstCrackEvent) {
+        // Delete existing FC first, then mark new one
+        fetch(`/api/roasts/${roastId}/first-crack`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Previous first crack deleted:', data);
+            firstCrackEvent = null;
+            updateFirstCrackMarker(null);
+            markFC();
+        })
+        .catch(error => {
+            console.error('Error deleting previous first crack:', error);
+            markFC(); // Try to mark anyway
+        });
+    } else {
+        markFC();
+    }
+}
+
+// Check for existing first crack event on page load
+fetch(`/api/roasts/${roastId}/first-crack`)
+    .then(response => {
+        if (response.ok) {
+            return response.json();
+        } else if (response.status === 404) {
+            // No first crack event exists yet - this is normal
+            console.log('No first crack event found for this roast (this is normal)');
+            return null;
+        } else {
+            throw new Error(`Failed to fetch first crack info: ${response.status}`);
+        }
+    })
+    .then(fcEvent => {
+        if (fcEvent) {
+            firstCrackEvent = fcEvent;
+            updateFirstCrackMarker(fcEvent);
+            console.log('Loaded existing first crack event:', fcEvent);
+        }
+    })
+    .catch(error => {
+        console.error('Error fetching first crack info:', error);
+    });
+
+// Socket event handlers for first crack
+socket.on('first_crack_detected', (data) => {
+    if (data.roast_id === roastId) {
+        firstCrackEvent = data;
+        updateFirstCrackMarker(data);
+        
+        // Show notification
+        const notification = document.createElement('div');
+        notification.className = 'fixed top-4 right-4 bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+        notification.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas fa-fire mr-2"></i>
+                <span>First Crack Detected! (${(data.confidence_score * 100).toFixed(0)}% confidence)</span>
+            </div>
+        `;
+        document.body.appendChild(notification);
+        
+        // Remove notification after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 5000);
+    }
+});
+
+// Manual first crack button
+const markFCBtn = document.getElementById('markFirstCrackBtn');
+console.log('Mark FC button element:', markFCBtn);
+if (markFCBtn) {
+    console.log('Attaching click handler to Mark FC button');
+    markFCBtn.addEventListener('click', function(e) {
+        console.log('Mark FC button clicked!');
+        e.preventDefault();
+        markFirstCrackManually();
+    });
+} else {
+    console.log('Mark FC button not found on page');
+}
 </script>
 {% endblock %}

@@ -36,6 +36,8 @@ class DatabaseManager:
                         end_time TEXT,
                         name TEXT NOT NULL,
                         status TEXT NOT NULL DEFAULT 'active',
+                        first_crack_time TEXT,
+                        first_crack_detected_by TEXT,
                         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
@@ -54,6 +56,22 @@ class DatabaseManager:
                     )
                 ''')
                 
+                # Create first_crack_events table
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS first_crack_events (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        roast_id TEXT NOT NULL,
+                        timestamp TEXT NOT NULL,
+                        detection_method TEXT NOT NULL,
+                        confidence_score REAL,
+                        signal_scores TEXT,
+                        current_temperature REAL,
+                        notes TEXT,
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (roast_id) REFERENCES roast_sessions (id)
+                    )
+                ''')
+                
                 # Create indexes for performance
                 cursor.execute('''
                     CREATE INDEX IF NOT EXISTS idx_data_points_roast_id 
@@ -63,6 +81,11 @@ class DatabaseManager:
                 cursor.execute('''
                     CREATE INDEX IF NOT EXISTS idx_data_points_timestamp 
                     ON data_points (timestamp)
+                ''')
+                
+                cursor.execute('''
+                    CREATE INDEX IF NOT EXISTS idx_first_crack_events_roast_id 
+                    ON first_crack_events (roast_id)
                 ''')
                 
                 conn.commit()
@@ -336,4 +359,184 @@ class DatabaseManager:
                     
         except Exception as e:
             logger.error(f"Failed to delete roast session: {e}")
+            return False
+    
+    def add_first_crack_event(self, roast_id: str, timestamp: str, detection_method: str,
+                             confidence_score: float = None, signal_scores: Dict = None,
+                             current_temperature: float = None, notes: str = None) -> bool:
+        """Add a first crack event to the database"""
+        try:
+            import json
+            signal_scores_json = json.dumps(signal_scores) if signal_scores else None
+            
+            logger.debug(f"Adding first crack event: roast_id={roast_id}, timestamp={timestamp}, method={detection_method}")
+            
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Check if roast session exists
+                cursor.execute('''
+                    SELECT id FROM roast_sessions WHERE id = ?
+                ''', (roast_id,))
+                
+                if not cursor.fetchone():
+                    logger.error(f"Roast session {roast_id} not found")
+                    return False
+                
+                # Check if first crack already exists for this roast
+                cursor.execute('''
+                    SELECT id FROM first_crack_events WHERE roast_id = ?
+                ''', (roast_id,))
+                
+                existing = cursor.fetchone()
+                if existing:
+                    # Delete existing first crack event first
+                    cursor.execute('''
+                        DELETE FROM first_crack_events WHERE roast_id = ?
+                    ''', (roast_id,))
+                    logger.info(f"Deleted existing first crack event for roast {roast_id}")
+                
+                # Insert new first crack event
+                cursor.execute('''
+                    INSERT INTO first_crack_events 
+                    (roast_id, timestamp, detection_method, confidence_score, signal_scores, 
+                     current_temperature, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (roast_id, timestamp, detection_method, confidence_score, signal_scores_json,
+                      current_temperature, notes))
+                
+                fc_id = cursor.lastrowid
+                logger.debug(f"Inserted first crack event with ID: {fc_id}")
+                
+                # Update roast session with first crack info
+                cursor.execute('''
+                    UPDATE roast_sessions 
+                    SET first_crack_time = ?, first_crack_detected_by = ?
+                    WHERE id = ?
+                ''', (timestamp, detection_method, roast_id))
+                
+                updated_rows = cursor.rowcount
+                logger.debug(f"Updated {updated_rows} roast session rows")
+                
+                conn.commit()
+                logger.info(f"Successfully added first crack event for roast {roast_id} at {timestamp}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to add first crack event for roast {roast_id}: {e}", exc_info=True)
+            return False
+    
+    def get_first_crack_event(self, roast_id: str) -> Optional[Dict]:
+        """Get the first crack event for a roast session"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    SELECT * FROM first_crack_events WHERE roast_id = ?
+                ''', (roast_id,))
+                
+                row = cursor.fetchone()
+                if row:
+                    result = dict(row)
+                    # Parse signal_scores JSON if present
+                    if result.get('signal_scores'):
+                        import json
+                        try:
+                            result['signal_scores'] = json.loads(result['signal_scores'])
+                        except json.JSONDecodeError:
+                            result['signal_scores'] = None
+                    return result
+                return None
+                
+        except Exception as e:
+            logger.error(f"Failed to get first crack event: {e}")
+            return None
+    
+    def update_first_crack_event(self, roast_id: str, **kwargs) -> bool:
+        """Update an existing first crack event"""
+        try:
+            if not kwargs:
+                return False
+                
+            # Build update query dynamically
+            update_fields = []
+            update_values = []
+            
+            for field, value in kwargs.items():
+                if field in ['timestamp', 'detection_method', 'confidence_score', 
+                           'current_temperature', 'notes']:
+                    update_fields.append(f"{field} = ?")
+                    update_values.append(value)
+                elif field == 'signal_scores' and isinstance(value, dict):
+                    import json
+                    update_fields.append("signal_scores = ?")
+                    update_values.append(json.dumps(value))
+            
+            if not update_fields:
+                return False
+            
+            update_values.append(roast_id)
+            
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                query = f'''
+                    UPDATE first_crack_events 
+                    SET {', '.join(update_fields)}
+                    WHERE roast_id = ?
+                '''
+                
+                cursor.execute(query, update_values)
+                
+                # Also update roast session if timestamp or method changed
+                if 'timestamp' in kwargs or 'detection_method' in kwargs:
+                    cursor.execute('''
+                        UPDATE roast_sessions 
+                        SET first_crack_time = COALESCE(?, first_crack_time),
+                            first_crack_detected_by = COALESCE(?, first_crack_detected_by)
+                        WHERE id = ?
+                    ''', (kwargs.get('timestamp'), kwargs.get('detection_method'), roast_id))
+                
+                if cursor.rowcount > 0:
+                    conn.commit()
+                    logger.info(f"Updated first crack event for roast {roast_id}")
+                    return True
+                else:
+                    logger.warning(f"No first crack event found to update for roast {roast_id}")
+                    return False
+                
+        except Exception as e:
+            logger.error(f"Failed to update first crack event: {e}")
+            return False
+    
+    def delete_first_crack_event(self, roast_id: str) -> bool:
+        """Delete the first crack event for a roast session"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Delete first crack event
+                cursor.execute('''
+                    DELETE FROM first_crack_events WHERE roast_id = ?
+                ''', (roast_id,))
+                
+                # Clear first crack info from roast session
+                cursor.execute('''
+                    UPDATE roast_sessions 
+                    SET first_crack_time = NULL, first_crack_detected_by = NULL
+                    WHERE id = ?
+                ''', (roast_id,))
+                
+                if cursor.rowcount > 0:
+                    conn.commit()
+                    logger.info(f"Deleted first crack event for roast {roast_id}")
+                    return True
+                else:
+                    logger.warning(f"No first crack event found to delete for roast {roast_id}")
+                    return False
+                
+        except Exception as e:
+            logger.error(f"Failed to delete first crack event: {e}")
             return False
